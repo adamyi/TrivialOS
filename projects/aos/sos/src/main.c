@@ -527,6 +527,32 @@ void init_muslc(void)
     muslcsys_install_syscall(__NR_madvise, sys_madvise);
 }
 
+uint64_t last_time1 = 0;
+uint64_t last_time2 = 0;
+uint64_t last_time3 = 0;
+
+static void print_time1(uint32_t id, void *data) {
+    uint64_t curr = get_time();
+    register_timer(100000, print_time1, data);
+    printf("print_time1: %lu (+%luus since last time)\n", curr, curr - last_time1);
+    last_time1 = curr;
+    // print_time(id, data);
+}
+
+static void print_time2(uint32_t id, void *data) {
+    uint64_t curr = get_time();
+    register_timer(200000, print_time2, data);
+    printf("print_time2: %lu (+%luus since last time)\n", curr, curr - last_time2);
+    last_time2 = curr;
+    // print_time(id, data);
+}
+
+static void print_time3(uint32_t id, void *data) {
+    uint64_t curr = get_time();
+    printf("print_time3: %lu (+%luus since last time)\n", curr, curr - last_time3);
+}
+
+
 NORETURN void *main_continued(UNUSED void *arg)
 {
     /* Initialise other system compenents here */
@@ -558,6 +584,20 @@ NORETURN void *main_continued(UNUSED void *arg)
     start_timer(timer_vaddr);
     /* You will need to register an IRQ handler for the timer here.
      * See "irq.h". */
+    // sos_register_irq_handler(TIMER_A_IRQ, true, timer_irq, NULL, NULL);
+    sos_register_irq_handler(meson_timeout_irq(MESON_TIMER_A), true, timer_irq, NULL, NULL);
+
+    // print_time(0, NULL);
+    last_time1 = last_time2 = get_time();
+    printf("Timer started at %lu\n", last_time1);
+
+    print_time1(0, NULL);
+    print_time2(0, NULL);
+
+    last_time3 = get_time();
+    register_timer(1000000, print_time3, NULL);
+    register_timer(5000000, print_time3, NULL);
+    register_timer(10000000, print_time3, NULL);
 
     /* Start the user application */
     printf("Start first process\n");
@@ -568,6 +608,7 @@ NORETURN void *main_continued(UNUSED void *arg)
     init_threads(ipc_ep, sched_ctrl_start, sched_ctrl_end);
     syscall_loop(ipc_ep);
 }
+
 /*
  * Main entry point - called by crt.
  */
