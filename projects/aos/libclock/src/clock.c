@@ -12,6 +12,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <clock/clock.h>
+#include <stdbool.h>
 
 /* The functions in src/device.h should help you interact with the timer
  * to set registers and configure timeouts. */
@@ -19,7 +20,7 @@
 #include "utils/rolling_id.h"
 #include "utils/priorityqueue.h"
 
-#define ALLOWED_VARIANCE 0
+#define ALLOWED_VARIANCE 10000
 
 struct timer {
     uint32_t id;
@@ -35,6 +36,8 @@ static struct {
     pqueue_t timer_queue;
     rid_t timer_ids;
 } clock;
+
+static bool timer_enabled = false;
 
 static int compareTimeStamp(timestamp_t a, timestamp_t b) {
     // i'm concerned huge difference in value for unsigned int
@@ -74,6 +77,7 @@ int start_timer(unsigned char *timer_vaddr)
     rid_init(&(clock.timer_ids), MAX_TIMER_ID, 1);
 
     configure_timestamp(clock.regs, TIMESTAMP_TIMEBASE_1_US);
+    timer_enabled = true;
 
     return CLOCK_R_OK;
 }
@@ -154,7 +158,6 @@ int timer_irq(
 {
     // printf("irq at %lu\n", get_time());
     struct timer *timer = pqueue_peek(&(clock.timer_queue));
-    // TODO: deal with scaling
     timestamp_t c = get_time();
     int i = 0;
     while(timer != NULL && get_time() >= timer->trigger_time - ALLOWED_VARIANCE) {
@@ -168,7 +171,8 @@ int timer_irq(
     update_timer();
 
     /* Acknowledge that the IRQ has been handled */
-    seL4_IRQHandler_Ack(irq_handler);
+    seL4_Error ack_err = seL4_IRQHandler_Ack(irq_handler);
+    if (ack_err != seL4_NoError) return ack_err;
 
     // printf("irq done at %lu\n", get_time());
 
@@ -177,8 +181,15 @@ int timer_irq(
 
 int stop_timer(void)
 {
-    //TODO: write this
     /* Stop the timer from producing further interrupts and remove all
      * existing timeouts */
+    if (timer_enabled) {
+        configure_timeout(clock.regs, MESON_TIMER_A, false, false, 0, 0);
+        configure_timestamp(clock.regs, TIMESTAMP_TIMEBASE_SYSTEM);
+        pqueue_destroy(&(clock.timer_queue));
+        rid_destroy(&(clock.timer_ids));
+        timer_enabled = false;
+    }
+
     return CLOCK_R_OK;
 }
