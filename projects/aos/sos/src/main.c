@@ -552,6 +552,14 @@ static void print_time3(uint32_t id, void *data) {
     printf("print_time3: %lu (+%luus since last time)\n", curr, curr - last_time3);
 }
 
+static void reset_timer(uint32_t id, void *data) {
+    uint64_t curr = get_time();
+    printf("reset_timer: %lu (+%luus since last time)\n", curr, curr - last_time3);
+    start_timer(data);
+    last_time2 = get_time();
+    print_time2(0, NULL);
+}
+
 
 NORETURN void *main_continued(UNUSED void *arg)
 {
@@ -582,6 +590,8 @@ NORETURN void *main_continued(UNUSED void *arg)
     /* Initialises the timer */
     printf("Timer init\n");
     start_timer(timer_vaddr);
+    printf("Timer reinit for fun\n");
+    start_timer(timer_vaddr);
     /* You will need to register an IRQ handler for the timer here.
      * See "irq.h". */
     // sos_register_irq_handler(TIMER_A_IRQ, true, timer_irq, NULL, NULL);
@@ -598,6 +608,7 @@ NORETURN void *main_continued(UNUSED void *arg)
     register_timer(1000000, print_time3, NULL);
     register_timer(5000000, print_time3, NULL);
     register_timer(10000000, print_time3, NULL);
+    register_timer(12000000, reset_timer, timer_vaddr);
 
     /* Start the user application */
     printf("Start first process\n");
