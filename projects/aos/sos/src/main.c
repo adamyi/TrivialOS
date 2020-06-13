@@ -95,14 +95,14 @@ static process_t tty_test_process;
 
 NORETURN void syscall_loop(seL4_CPtr ep)
 {
-    seL4_CPtr reply;
-    /* Create reply object */
-    ut_t *reply_ut = alloc_retype(&reply, seL4_ReplyObject, seL4_ReplyBits);
-    if (reply_ut == NULL) {
-        ZF_LOGF("Failed to alloc reply object ut");
-    }
-
     while (1) {
+        seL4_CPtr reply;
+        /* Create reply object */
+        ut_t *reply_ut = alloc_retype(&reply, seL4_ReplyObject, seL4_ReplyBits);
+        if (reply_ut == NULL) {
+            ZF_LOGF("Failed to alloc reply object ut");
+        }
+
         seL4_Word badge = 0;
         /* Block on ep, waiting for an IPC sent over ep, or
          * a notification from our bound notification object */
@@ -115,6 +115,8 @@ NORETURN void syscall_loop(seL4_CPtr ep)
             /* It's a notification from our bound notification
              * object! */
             sos_handle_irq_notification(&badge);
+            cspace_delete(&cspace, reply);
+            cspace_free_slot(&cspace, reply);
         } else if (label == seL4_Fault_NullFault) {
             /* It's not a fault or an interrupt, it must be an IPC
              * message from tty_test! */

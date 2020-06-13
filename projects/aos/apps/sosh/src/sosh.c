@@ -27,7 +27,8 @@
 
 #include "benchmark.h"
 
-#define BUF_SIZ    6144
+//#define BUF_SIZ    6144
+#define BUF_SIZ    10
 #define MAX_ARGS   32
 
 static int in;
@@ -328,6 +329,7 @@ int main(void)
     char *bp, *p;
 
     int out = open("console", O_WRONLY);
+
     assert(out >= 0);
     printf("Calling write\n");
     write(out, "test\n", 5);
@@ -339,6 +341,18 @@ int main(void)
     bp = buf;
     done = 0;
     new = 1;
+
+    for (int i = 0; i < 10; i++) {
+        printf("%d\n", time(NULL));
+        sleep(1);
+    }
+
+    while(1) {
+        int ret = read(out, bp, 9);
+        printf("read returned %d\n", ret);
+        bp[ret] = '\0';
+        printf("===%s===\n", bp);
+    }
 
     printf("\n[SOS Starting]\n");
 

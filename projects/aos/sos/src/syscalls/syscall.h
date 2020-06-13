@@ -3,11 +3,12 @@
 #include <sel4runtime.h>
 #include <cspace/cspace.h>
 #include "../process.h"
+#include "../coroutine/picoro.h"
 
 #define SYSCALL_IMPL_(name) _syscall_##name##_impl
 
 #define DEFINE_SYSCALL(syscall_name) \
-    seL4_MessageInfo_t SYSCALL_IMPL_(syscall_name)(process_t *proc); \
+    seL4_MessageInfo_t SYSCALL_IMPL_(syscall_name)(process_t *proc, coro_t me); \
     extern syscall_t syscall_##syscall_name; \
     extern int syscall_no_##syscall_name
 
@@ -18,7 +19,7 @@
         .args = syscall_args, \
         .implementation = SYSCALL_IMPL_(syscall_name) \
     }; \
-    seL4_MessageInfo_t SYSCALL_IMPL_(syscall_name)(process_t *proc)
+    seL4_MessageInfo_t SYSCALL_IMPL_(syscall_name)(process_t *proc, coro_t me)
 
 #define START_INSTALLING_SYSCALLS() int sisline = __LINE__
 #define INSTALL_SYSCALL(syscall_name) \
@@ -32,6 +33,6 @@ void init_syscall();
 typedef struct syscall {
     char *name;
     size_t args;
-    seL4_MessageInfo_t (*implementation)(process_t *proc);
+    seL4_MessageInfo_t (*implementation)(process_t *proc, coro_t me);
 } syscall_t;
 

@@ -15,7 +15,7 @@ IMPLEMENT_SYSCALL(open, 3) {
     pathname[1023] ='\0';
     printf("%s\n", pathname);
     int flags = seL4_GetMR(2);
-    int ret = vfs_open(pathname, flags, &vn);
+    int ret = vfs_open(pathname, flags, &vn, me);
     printf("vfs opened\n");
     if (ret != 0) {
         //TODO: error handling
@@ -25,8 +25,9 @@ IMPLEMENT_SYSCALL(open, 3) {
 }
 
 IMPLEMENT_SYSCALL(close, 1) {
-    (void) proc;
-    return seL4_MessageInfo_new(0, 0, 0, 0);
+    int ret = vfs_close(vn, me);
+    seL4_SetMR(0, ret);
+    return seL4_MessageInfo_new(0, 0, 0, 1);
 }
 
 IMPLEMENT_SYSCALL(read, 3) {
@@ -34,8 +35,9 @@ IMPLEMENT_SYSCALL(read, 3) {
     if (size > PAGE_SIZE_4K) size = PAGE_SIZE_4K;
     uio_t uio;
     uio_kinit(&uio, (void *)proc->shared_buffer_vaddr, size, 0, UIO_WRITE);
-    int ret = VOP_READ(vn, &uio);
+    int ret = VOP_READ(vn, &uio, me);
     seL4_SetMR(0, ret);
+    printf("earth is a donald\n");
     return seL4_MessageInfo_new(0, 0, 0, 1);
 }
 
@@ -44,7 +46,7 @@ IMPLEMENT_SYSCALL(write, 3) {
     if (size > PAGE_SIZE_4K) size = PAGE_SIZE_4K;
     uio_t uio;
     uio_kinit(&uio, (void *)proc->shared_buffer_vaddr, size, 0, UIO_READ);
-    int ret = VOP_WRITE(vn, &uio);
+    int ret = VOP_WRITE(vn, &uio, me);
     seL4_SetMR(0, ret);
     return seL4_MessageInfo_new(0, 0, 0, 1);
 }

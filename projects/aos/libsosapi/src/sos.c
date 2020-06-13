@@ -42,14 +42,21 @@ int sos_sys_close(int file)
 
 int sos_sys_read(int file, char *buf, size_t nbyte)
 {
-    // printf("Calling read\n");
-    return 0;
+    seL4_SetMR(0, 1);
+    seL4_SetMR(1, file);
+    seL4_SetMR(2, buf);
+    if (nbyte > PAGE_SIZE_4K) nbyte = PAGE_SIZE_4K;
+    seL4_SetMR(3, nbyte);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 4));
+    printf("gor reply\n");
+    size_t rc = seL4_GetMR(0);
+    memcpy(buf, SHARED_BUFFER_VADDR, rc);
+    printf("got reply %u\n", rc);
+    return rc;
 }
 
 int sos_sys_write(int file, const char *buf, size_t nbyte)
 {
-    printf("Fucking write\n");
-    //return sos_write2(buf, nbyte);
     seL4_SetMR(0, 2);
     seL4_SetMR(1, file);
     seL4_SetMR(2, buf);
@@ -106,11 +113,14 @@ pid_t sos_process_wait(pid_t pid)
 
 void sos_sys_usleep(int msec)
 {
-    assert(!"You need to implement this");
+    seL4_SetMR(0, 4);
+    seL4_SetMR(1, msec);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 2));
 }
 
 int64_t sos_sys_time_stamp(void)
 {
-    assert(!"You need to implement this");
-    return -1;
+    seL4_SetMR(0, 5);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 1));
+    return seL4_GetMR(0);
 }

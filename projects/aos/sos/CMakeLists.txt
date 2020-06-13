@@ -62,9 +62,11 @@ add_executable(
     src/vm/pagetable.c
     src/syscalls/syscall.c
     src/syscalls/files.c
+    src/syscalls/time.c
     src/vfs/vfs.c
     src/vfs/uio.c
     src/fs/console.c
+    src/coroutine/picoro.c
 )
 target_include_directories(sos PRIVATE "include")
 target_link_libraries(
