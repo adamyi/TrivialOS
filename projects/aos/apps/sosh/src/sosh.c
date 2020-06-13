@@ -327,6 +327,12 @@ int main(void)
     int i, r, done, found, new, argc;
     char *bp, *p;
 
+    int out = open("console", O_WRONLY);
+    assert(out >= 0);
+    printf("Calling write\n");
+    write(out, "test\n", 5);
+    printf("Finish write\n");
+
     in = open("console", O_RDONLY);
     assert(in >= 0);
 

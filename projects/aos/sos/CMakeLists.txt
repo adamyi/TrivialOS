@@ -58,6 +58,13 @@ add_executable(
     src/sos.lds
     src/utils.c
     src/threads.c
+    src/process.c
+    src/vm/pagetable.c
+    src/syscalls/syscall.c
+    src/syscalls/files.c
+    src/vfs/vfs.c
+    src/vfs/uio.c
+    src/fs/console.c
 )
 target_include_directories(sos PRIVATE "include")
 target_link_libraries(

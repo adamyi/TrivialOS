@@ -41,6 +41,9 @@
 #include "tests.h"
 #include "utils.h"
 #include "threads.h"
+#include "process.h"
+#include "syscalls/syscall.h"
+#include "fs/console.h"
 
 #include <aos/vsyscall.h>
 
@@ -56,7 +59,8 @@
 #define IRQ_EP_BADGE         BIT(seL4_BadgeBits - 1ul)
 #define IRQ_IDENT_BADGE_BITS MASK(seL4_BadgeBits - 1ul)
 
-#define TTY_NAME             "tty_test"
+// #define TTY_NAME             "tty_test"
+#define TTY_NAME             "sosh"
 #define TTY_PRIORITY         (0)
 #define TTY_EP_BADGE         (101)
 
@@ -68,6 +72,7 @@
  * A dummy starting syscall
  */
 #define SOS_SYSCALL0 0
+#define SOS_SYSCALL_WRITE 2
 
 /* The linker will link this symbol to the start address  *
  * of an archive of attached applications.                */
@@ -84,53 +89,9 @@ static seL4_CPtr sched_ctrl_start;
 static seL4_CPtr sched_ctrl_end;
 
 /* the one process we start */
-static struct {
-    ut_t *tcb_ut;
-    seL4_CPtr tcb;
-    ut_t *vspace_ut;
-    seL4_CPtr vspace;
-
-    ut_t *ipc_buffer_ut;
-    seL4_CPtr ipc_buffer;
-
-    ut_t *sched_context_ut;
-    seL4_CPtr sched_context;
-
-    cspace_t cspace;
-
-    ut_t *stack_ut;
-    seL4_CPtr stack;
-} tty_test_process;
+static process_t tty_test_process;
 
 
-void handle_syscall(UNUSED seL4_Word badge, UNUSED int num_args, seL4_CPtr reply)
-{
-
-    /* get the first word of the message, which in the SOS protocol is the number
-     * of the SOS "syscall". */
-    seL4_Word syscall_number = seL4_GetMR(0);
-
-    /* Process system call */
-    switch (syscall_number) {
-    case SOS_SYSCALL0:
-        ZF_LOGV("syscall: thread example made syscall 0!\n");
-        /* construct a reply message of length 1 */
-        seL4_MessageInfo_t reply_msg = seL4_MessageInfo_new(0, 0, 0, 1);
-        /* Set the first (and only) word in the message to 0 */
-        seL4_SetMR(0, 0);
-        /* Send the reply to the saved reply capability. */
-        seL4_Send(reply, reply_msg);
-        /* in MCS kernel, reply object is meant to be reused rather than freed */
-        /* Free the slot we allocated for the reply - it is now empty, as the reply
-         * capability was consumed by the send. */
-        cspace_free_slot(&cspace, reply);
-        break;
-
-    default:
-        ZF_LOGE("Unknown syscall %lu\n", syscall_number);
-        /* don't reply to an unknown syscall */
-    }
-}
 
 NORETURN void syscall_loop(seL4_CPtr ep)
 {
@@ -157,7 +118,7 @@ NORETURN void syscall_loop(seL4_CPtr ep)
         } else if (label == seL4_Fault_NullFault) {
             /* It's not a fault or an interrupt, it must be an IPC
              * message from tty_test! */
-            handle_syscall(badge, seL4_MessageInfo_get_length(message) - 1, reply);
+            handle_syscall(&cspace, badge, seL4_MessageInfo_get_length(message) - 1, reply, &tty_test_process);
         } else {
             /* some kind of fault */
             debug_print_fault(message, TTY_NAME);
@@ -357,6 +318,41 @@ bool start_first_process(char *app_name, seL4_CPtr ep)
         return false;
     }
 
+    /* Create a shared buffer */
+    tty_test_process.shared_buffer_ut = alloc_retype(&tty_test_process.shared_buffer, seL4_ARM_SmallPageObject,
+                                                  seL4_PageBits);
+    if (tty_test_process.shared_buffer_ut == NULL) {
+        ZF_LOGE("Failed to alloc shared buffer ut");
+        return false;
+    }
+
+    /* allocate a slot to duplicate the shared buffer frame cap so we can map it into our address space */
+    seL4_CPtr local_shared_cptr = cspace_alloc_slot(&cspace);
+    if (local_shared_cptr == seL4_CapNull) {
+        ZF_LOGE("Failed to alloc slot for stack");
+        return false;
+    }
+
+    /* copy the shared frame cap into the slot */
+    err = cspace_copy(&cspace, local_shared_cptr, &cspace, tty_test_process.shared_buffer, seL4_AllRights);
+    if (err != seL4_NoError) {
+        cspace_free_slot(&cspace, local_shared_cptr);
+        ZF_LOGE("Failed to copy cap");
+        return false;
+    }
+
+    /* map it into the sos address space */
+    tty_test_process.shared_buffer_vaddr = get_new_shared_buffer_vaddr();
+    err = map_frame(&cspace, local_shared_cptr, seL4_CapInitThreadVSpace, tty_test_process.shared_buffer_vaddr, seL4_AllRights,
+                    seL4_ARM_Default_VMAttributes);
+    if (err != seL4_NoError) {
+        cspace_delete(&cspace, local_shared_cptr);
+        cspace_free_slot(&cspace, local_shared_cptr);
+        printf("%d\n", err);
+        ZF_LOGE("Failed to map");
+        return false;
+    }
+
     /* allocate a new slot in the target cspace which we will mint a badged endpoint cap into --
      * the badge is used to identify the process, which will come in handy when you have multiple
      * processes. */
@@ -453,6 +449,14 @@ bool start_first_process(char *app_name, seL4_CPtr ep)
         return false;
     }
 
+    /* Map in the shared buffer for the thread */
+    err = map_frame(&cspace, tty_test_process.shared_buffer, tty_test_process.vspace, PROCESS_IPC_BUFFER + PAGE_SIZE_4K,
+                    seL4_AllRights, seL4_ARM_Default_VMAttributes);
+    if (err != 0) {
+        ZF_LOGE("Unable to map shared buffer for user app");
+        return false;
+    }
+
     /* Start the new process */
     seL4_UserContext context = {
         .pc = elf_getEntryPoint(&elf_file),
@@ -527,40 +531,6 @@ void init_muslc(void)
     muslcsys_install_syscall(__NR_madvise, sys_madvise);
 }
 
-uint64_t last_time1 = 0;
-uint64_t last_time2 = 0;
-uint64_t last_time3 = 0;
-
-static void print_time1(uint32_t id, void *data) {
-    uint64_t curr = get_time();
-    register_timer(100000, print_time1, data);
-    printf("print_time1: %lu (+%luus since last time)\n", curr, curr - last_time1);
-    last_time1 = curr;
-    // print_time(id, data);
-}
-
-static void print_time2(uint32_t id, void *data) {
-    uint64_t curr = get_time();
-    register_timer(200000, print_time2, data);
-    printf("print_time2: %lu (+%luus since last time)\n", curr, curr - last_time2);
-    last_time2 = curr;
-    // print_time(id, data);
-}
-
-static void print_time3(uint32_t id, void *data) {
-    uint64_t curr = get_time();
-    printf("print_time3: %lu (+%luus since last time)\n", curr, curr - last_time3);
-}
-
-static void reset_timer(uint32_t id, void *data) {
-    uint64_t curr = get_time();
-    printf("reset_timer: %lu (+%luus since last time)\n", curr, curr - last_time3);
-    start_timer(data);
-    last_time2 = get_time();
-    print_time2(0, NULL);
-}
-
-
 NORETURN void *main_continued(UNUSED void *arg)
 {
     /* Initialise other system compenents here */
@@ -590,25 +560,15 @@ NORETURN void *main_continued(UNUSED void *arg)
     /* Initialises the timer */
     printf("Timer init\n");
     start_timer(timer_vaddr);
-    printf("Timer reinit for fun\n");
-    start_timer(timer_vaddr);
     /* You will need to register an IRQ handler for the timer here.
      * See "irq.h". */
-    // sos_register_irq_handler(TIMER_A_IRQ, true, timer_irq, NULL, NULL);
     sos_register_irq_handler(meson_timeout_irq(MESON_TIMER_A), true, timer_irq, NULL, NULL);
 
-    // print_time(0, NULL);
-    last_time1 = last_time2 = get_time();
-    printf("Timer started at %lu\n", last_time1);
+    /* Initialize syscall table */
+    init_syscall();
 
-    print_time1(0, NULL);
-    print_time2(0, NULL);
-
-    last_time3 = get_time();
-    register_timer(1000000, print_time3, NULL);
-    register_timer(5000000, print_time3, NULL);
-    register_timer(10000000, print_time3, NULL);
-    register_timer(12000000, reset_timer, timer_vaddr);
+    /* Initialize console */
+    console_init();
 
     /* Start the user application */
     printf("Start first process\n");

@@ -21,6 +21,7 @@
 #define SOS_DEVICE_START     (0xB0000000)
 #define SOS_STACK            (0xC0000000)
 #define SOS_IPC_BUFFER       (0xD0000000)
+#define SOS_SHARED_BUFFER    (0xE0000000)
 #define SOS_STACK_PAGES      100
 #define SOS_UT_TABLE         (0x8000000000)
 #define SOS_FRAME_TABLE      (0x8100000000)
