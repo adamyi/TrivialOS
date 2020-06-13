@@ -32,6 +32,7 @@ struct syscall_args {
     seL4_Word badge;
     size_t num_args;
     seL4_CPtr reply;
+    ut_t *reply_ut;
     process_t *proc;
     coro_t coro;
 };
@@ -40,6 +41,7 @@ static void *_handle_syscall_impl(void *args) {
     struct syscall_args *sargs = (struct syscall_args *) args;
     cspace_t *cspace = sargs->cspace;
     seL4_CPtr reply = sargs->reply;
+    ut_t *reply_ut = sargs->reply_ut;
 
     /* get the first word of the message, which in the SOS protocol is the number
      * of the SOS "syscall". */
@@ -59,17 +61,19 @@ static void *_handle_syscall_impl(void *args) {
     seL4_Send(reply, reply_msg);
     cspace_delete(cspace, reply);
     cspace_free_slot(cspace, reply);
+    ut_free(reply_ut);
     printf("sent\n");
     return NULL;
 }
 
-void handle_syscall(cspace_t *cspace, seL4_Word badge, size_t num_args, seL4_CPtr reply, process_t *proc) {
+void handle_syscall(cspace_t *cspace, seL4_Word badge, size_t num_args, seL4_CPtr reply, ut_t *reply_ut, process_t *proc) {
     coro_t c = coroutine(_handle_syscall_impl);
     struct syscall_args args = {
         .cspace = cspace,
         .badge = badge,
         .num_args = num_args,
         .reply = reply,
+        .reply_ut = reply_ut,
         .proc = proc,
         .coro = c
     };

@@ -3,6 +3,7 @@
 #include <sel4runtime.h>
 #include <cspace/cspace.h>
 #include "../process.h"
+#include "../ut.h"
 #include "../coroutine/picoro.h"
 
 #define SYSCALL_IMPL_(name) _syscall_##name##_impl
@@ -27,7 +28,7 @@
     syscalls[syscall_no_##syscall_name] = &syscall_##syscall_name; \
     printf("Registered syscall " #syscall_name " with code %d\n", syscall_no_##syscall_name)
 
-void handle_syscall(cspace_t *cspace, seL4_Word badge, size_t num_args, seL4_CPtr reply, process_t *proc);
+void handle_syscall(cspace_t *cspace, seL4_Word badge, size_t num_args, seL4_CPtr reply, ut_t *reply_ut, process_t *proc);
 void init_syscall();
 
 typedef struct syscall {

@@ -115,12 +115,13 @@ NORETURN void syscall_loop(seL4_CPtr ep)
             /* It's a notification from our bound notification
              * object! */
             sos_handle_irq_notification(&badge);
-            cspace_delete(&cspace, reply);
+            seL4_Error err = cspace_delete(&cspace, reply);
             cspace_free_slot(&cspace, reply);
+            ut_free(reply_ut);
         } else if (label == seL4_Fault_NullFault) {
             /* It's not a fault or an interrupt, it must be an IPC
              * message from tty_test! */
-            handle_syscall(&cspace, badge, seL4_MessageInfo_get_length(message) - 1, reply, &tty_test_process);
+            handle_syscall(&cspace, badge, seL4_MessageInfo_get_length(message) - 1, reply, reply_ut, &tty_test_process);
         } else {
             /* some kind of fault */
             debug_print_fault(message, TTY_NAME);

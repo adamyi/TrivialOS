@@ -32,7 +32,7 @@ static void console_read_handler(struct serial *serial, char c) {
     }
     if (c == '\n') {
         //TODO: TEST THIS AS WELL
-        queue_enqueue(&newline_queue, (void *) ra_ind2idx(kbuff, kbuff->size));
+        queue_enqueue(&newline_queue, (void *) ra_ind2idx(kbuff, kbuff->size - 1));
         // check if any read is blocked
         if (blocked_reader) {
             coro_t c = blocked_reader;
@@ -43,7 +43,7 @@ static void console_read_handler(struct serial *serial, char c) {
 }
 
 int console_init() {
-    kbuff = new_rollingarray(PAGE_SIZE_4K);
+    kbuff = new_rollingarray(20);//PAGE_SIZE_4K);
     if (kbuff == NULL) {
         ZF_LOGE("Error can't initialize kbuff");
         return -1;
@@ -93,7 +93,7 @@ int console_read(vnode_t *file, struct uio *uio, coro_t me) {
         newline_idx = (size_t) queue_peek(&newline_queue);
     }
     // TODO: TEST THIS CODE!!!
-    newline_idx = ra_idx2ind(kbuff, newline_idx);
+    newline_idx = ra_idx2ind(kbuff, newline_idx) + 1;
     printf("nlidx %u uio len %u\n", newline_idx, uio->iovec.len);
     if (newline_idx <= uio->iovec.len) {
         queue_dequeue(&newline_queue);
