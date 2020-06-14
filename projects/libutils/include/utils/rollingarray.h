@@ -1,6 +1,5 @@
 // Rolling Array Data Type
 // written by Adam Yi <i@adamyi.com>
-
 #include <stdbool.h>
 #include <stddef.h>
 
@@ -9,6 +8,9 @@
 
 #define RA_UNKNOWN_ITEM (-1)
 
+// idx refers to physical index in internal array
+// ind refers to logical index in rolling array
+
 typedef char ra_item_t;
 
 typedef struct rollingarray {
@@ -16,6 +18,22 @@ typedef struct rollingarray {
     ra_item_t *value;
     size_t start, size;
 } rollingarray_t;
+
+static inline size_t ra_ind2idx(rollingarray_t *ra, size_t ind) {
+    ind += ra->start;
+    if (ind >= ra->capacity) ind -= ra->capacity;
+    return ind;
+}
+
+static inline size_t ra_idx2ind(rollingarray_t *ra, size_t idx) {
+    if (idx < ra->start) return idx + ra->capacity - ra->start;
+    return idx - ra->start;
+}
+
+static inline size_t ra_ind2idx_backwards(rollingarray_t *ra, size_t ind) {
+    return ra_ind2idx(ra, ra->size - 1 - ind);
+}
+
 
 size_t ra_ind2idx(rollingarray_t *ra, size_t ind);
 size_t ra_idx2ind(rollingarray_t *ra, size_t idx);

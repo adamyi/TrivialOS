@@ -1,6 +1,7 @@
 #pragma once
 
 #include <sel4runtime.h>
+#include <sel4/sel4.h>
 #include <cspace/cspace.h>
 #include "../process.h"
 #include "../ut.h"
@@ -27,6 +28,15 @@
     syscall_no_##syscall_name = __LINE__ - sisline - 1; \
     syscalls[syscall_no_##syscall_name] = &syscall_##syscall_name; \
     printf("Registered syscall " #syscall_name " with code %d\n", syscall_no_##syscall_name)
+
+static inline seL4_MessageInfo_t return_word(seL4_Word word) {
+    seL4_SetMR(0, word);
+    return seL4_MessageInfo_new(0, 0, 0, 1);
+}
+
+static inline seL4_MessageInfo_t return_error() {
+    return return_word(-1);
+}
 
 void handle_syscall(cspace_t *cspace, seL4_Word badge, size_t num_args, seL4_CPtr reply, ut_t *reply_ut, process_t *proc);
 void init_syscall();

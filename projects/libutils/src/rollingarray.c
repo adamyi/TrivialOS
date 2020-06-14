@@ -8,24 +8,6 @@
 #include <stddef.h>
 #include <stdlib.h>
 
-// idx refers to physical index in internal array
-// ind refers to logical index in rolling array
-
-size_t ra_ind2idx(rollingarray_t *ra, size_t ind) {
-    ind += ra->start;
-    if (ind >= ra->capacity) ind -= ra->capacity;
-    return ind;
-}
-
-size_t ra_idx2ind(rollingarray_t *ra, size_t idx) {
-    if (idx < ra->start) return idx + ra->capacity - ra->start;
-    return idx - ra->start;
-}
-
-size_t ra_ind2idx_backwards(rollingarray_t *ra, size_t ind) {
-    return ra_ind2idx(ra, ra->size - 1 - ind);
-}
-
 rollingarray_t *new_rollingarray(size_t capacity) {
     rollingarray_t *new = malloc(sizeof(rollingarray_t));
     if (new == NULL) return NULL;

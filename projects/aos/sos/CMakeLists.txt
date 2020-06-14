@@ -65,6 +65,7 @@ add_executable(
     src/syscalls/time.c
     src/vfs/vfs.c
     src/vfs/uio.c
+    src/vfs/file.c
     src/fs/console.c
     src/coroutine/picoro.c
 )

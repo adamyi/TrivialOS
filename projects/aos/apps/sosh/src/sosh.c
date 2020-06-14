@@ -12,6 +12,7 @@
 /* Simple shell to run on SOS */
 
 #include <assert.h>
+#include <errno.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -343,13 +344,19 @@ int main(void)
     new = 1;
 
     for (int i = 0; i < 10; i++) {
-        printf("%d\n", time(NULL));
+        printf("timestamp: %ld\n", time(NULL));
         sleep(1);
     }
 
+    printf("in fd %d out fd %d\n", in, out);
+
     while(1) {
-        int ret = read(out, bp, 9);
+        int ret = read(in, bp, 9);
         printf("read returned %d\n", ret);
+        if (ret == -1) {
+            printf("errno: %d\n", errno);
+            while(1);
+        }
         bp[ret] = '\0';
         printf("===%s===\n", bp);
     }

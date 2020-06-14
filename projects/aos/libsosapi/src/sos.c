@@ -48,10 +48,10 @@ int sos_sys_read(int file, char *buf, size_t nbyte)
     if (nbyte > PAGE_SIZE_4K) nbyte = PAGE_SIZE_4K;
     seL4_SetMR(3, nbyte);
     seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 4));
-    printf("gor reply\n");
-    size_t rc = seL4_GetMR(0);
-    memcpy(buf, SHARED_BUFFER_VADDR, rc);
-    printf("got reply %u\n", rc);
+    int rc = seL4_GetMR(0);
+    printf("got reply %d\n", rc);
+    if (rc > 0)
+        memcpy(buf, SHARED_BUFFER_VADDR, rc);
     return rc;
 }
 

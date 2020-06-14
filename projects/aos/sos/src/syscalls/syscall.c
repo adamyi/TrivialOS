@@ -10,10 +10,6 @@
 
 static syscall_t *syscalls[SYSCALL_NUM];
 
-static seL4_MessageInfo_t return_error() {
-    seL4_SetMR(0, -1);
-    return seL4_MessageInfo_new(0, 0, 0, 1);
-}
 
 // REMEMBER TO CHANGE SYSCALL_NUM
 void init_syscall() {
