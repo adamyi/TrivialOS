@@ -2,10 +2,12 @@
 #include "../vfs/vfs.h"
 #include "utils/zf_log.h"
 #include <serial/serial.h>
+#include <fcntl.h>
 #include "utils/queue.h"
 #include "utils/rollingarray.h"
 #include "utils/page.h"
 #include "../coroutine/picoro.h"
+#include <sel4/sel4.h>
 
 vnode_ops_t console_ops = {
                 .vop_open    = NULL, 
@@ -25,13 +27,25 @@ static rollingarray_t *kbuff;
 static queue_t newline_queue;
 static coro_t blocked_reader = NULL;
 
+bool has_reader = false;
+
+static inline bool mode_is_read(seL4_Word flags) {
+    seL4_Word accmode = flags & O_ACCMODE;
+    return accmode == O_RDONLY || accmode == O_RDWR;
+}
+
+static inline bool mode_is_write(seL4_Word flags) {
+    seL4_Word accmode = flags & O_ACCMODE;
+    return accmode == O_WRONLY || accmode == O_RDWR;
+}
+
 static void console_read_handler(struct serial *serial, char c) {
     (void) serial;
     if (!rollingarray_add_item(kbuff, c)) {
         ZF_LOGE("kbuff is full");
     }
     if (c == '\n') {
-        //TODO: TEST THIS AS WELL
+        // FIXME: what if kbuff is full and there are multiple newlines
         queue_enqueue(&newline_queue, (void *) ra_ind2idx(kbuff, kbuff->size - 1));
         // check if any read is blocked
         if (blocked_reader) {
@@ -63,38 +77,44 @@ int console_init() {
 }
 
 int console_open(vnode_t *object, char *pathname, int flags_from_open, vnode_t **ret, coro_t me) {
-    printf("CONSOLE OPEN LMAO\n");
+    (void) object;
     (void) pathname;
-    (void) flags_from_open;
     (void) me;
     if (handle == NULL) {
         ZF_LOGE("Error initializing serial");
         return -1;
+    }
+    if (mode_is_read((seL4_Word) flags_from_open) && has_reader) {
+        ZF_LOGE("Already have a reader");
+        return -1;
+        has_reader = true;
     }
     vnode_t *vnode = malloc(sizeof(vnode_t));
     if (vnode == NULL) {
         ZF_LOGE("Error making vnode");
         return -1;
     }
-    vnode_init(vnode, &console_ops, handle);
+    vnode_init(vnode, &console_ops, (void *) (seL4_Word) flags_from_open);
     *ret = vnode;
     return 0;
 }
 
 int console_read(vnode_t *file, struct uio *uio, coro_t me) {
-    (void) file;
+    if (!mode_is_read((seL4_Word) file->data)) {
+        ZF_LOGE("Calling read on non-reader console vnode");
+        return 0;
+    }
     size_t newline_idx = (size_t) queue_peek(&newline_queue);
     if (newline_idx == 0) { //NULL
         assert (blocked_reader == NULL);
         blocked_reader = me;
-        printf("blocking\n");
+        ZF_LOGI("console reader blocking");
         yield(NULL);
-        printf("resumed\n");
+        ZF_LOGI("console reader resumed");
         newline_idx = (size_t) queue_peek(&newline_queue);
     }
-    // TODO: TEST THIS CODE!!!
     newline_idx = ra_idx2ind(kbuff, newline_idx) + 1;
-    printf("nlidx %u uio len %u\n", newline_idx, uio->iovec.len);
+    printf("nlidx %lu uio len %lu\n", newline_idx, uio->iovec.len);
     if (newline_idx <= uio->iovec.len) {
         queue_dequeue(&newline_queue);
         uio->iovec.len = newline_idx;
@@ -103,7 +123,7 @@ int console_read(vnode_t *file, struct uio *uio, coro_t me) {
     kbuff->start += uio->iovec.len;
     if (kbuff->start >= kbuff->capacity) kbuff->start -= kbuff->capacity;
     kbuff->size -= uio->iovec.len;
-    printf("remaining size %u\n", kbuff->size);
+    printf("remaining size %lu\n", kbuff->size);
     ((char *)uio->iovec.base)[uio->iovec.len] = '\0';
     printf("read %s\n", (char *)uio->iovec.base);
     return uio->iovec.len;
@@ -111,11 +131,18 @@ int console_read(vnode_t *file, struct uio *uio, coro_t me) {
 
 int console_write(vnode_t *file, struct uio *uio, coro_t me) {
     (void) me;
-    return serial_send(file->data, uio->iovec.base, uio->iovec.len);
+    if (!mode_is_write((seL4_Word) file->data)) {
+        ZF_LOGE("Calling write on non-writer console vnode");
+        return 0;
+    }
+    return serial_send(handle, uio->iovec.base, uio->iovec.len);
 }
 
 int console_reclaim(vnode_t *vnode, coro_t me) {
-    (void) vnode;
     (void) me;
+    if (mode_is_read((seL4_Word) vnode->data)) {
+        has_reader = false;
+    }
+    free(vnode);
     return 0;
 }
