@@ -9,8 +9,10 @@
 
 #define SYSCALL_IMPL_(name) _syscall_##name##_impl
 
+#define SYSCALL_PARAMS process_t *proc, coro_t me
+
 #define DEFINE_SYSCALL(syscall_name) \
-    seL4_MessageInfo_t SYSCALL_IMPL_(syscall_name)(process_t *proc, coro_t me); \
+    seL4_MessageInfo_t SYSCALL_IMPL_(syscall_name)(SYSCALL_PARAMS); \
     extern syscall_t syscall_##syscall_name; \
     extern int syscall_no_##syscall_name
 
@@ -21,7 +23,7 @@
         .args = syscall_args, \
         .implementation = SYSCALL_IMPL_(syscall_name) \
     }; \
-    seL4_MessageInfo_t SYSCALL_IMPL_(syscall_name)(process_t *proc, coro_t me)
+    seL4_MessageInfo_t SYSCALL_IMPL_(syscall_name)(SYSCALL_PARAMS)
 
 #define START_INSTALLING_SYSCALLS() int sisline = __LINE__
 #define INSTALL_SYSCALL(syscall_name) \
@@ -44,6 +46,6 @@ void init_syscall();
 typedef struct syscall {
     char *name;
     size_t args;
-    seL4_MessageInfo_t (*implementation)(process_t *proc, coro_t me);
+    seL4_MessageInfo_t (*implementation)(SYSCALL_PARAMS);
 } syscall_t;
 

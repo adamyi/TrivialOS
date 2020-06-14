@@ -6,7 +6,7 @@
 #include "files.h"
 #include "time.h"
 
-#define SYSCALL_NUM 6
+#define SYSCALL_NUM (6)
 
 static syscall_t *syscalls[SYSCALL_NUM];
 
