@@ -21,11 +21,26 @@
 #define SHARED_BUFFER_VADDR            (0xA0001000)
 #define PAGE_SIZE_4K                   (0x1000)
 
+#define SYSCALL_NO_OPEN       (0)
+#define SYSCALL_NO_READ       (1)
+#define SYSCALL_NO_WRITE      (2)
+#define SYSCALL_NO_CLOSE      (3)
+#define SYSCALL_NO_USLEEP     (4)
+#define SYSCALL_NO_TIME_STAMP (5)
+
+#define SYSCALL_NO_UNIMPL     (100)
+
+static int unimplemented_syscall() {
+    printf("Calling unimplemented syscall, using placeholder id %d\n", SYSCALL_NO_UNIMPL);
+    seL4_SetMR(0, SYSCALL_NO_UNIMPL);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 1));
+    return seL4_GetMR(0);
+}
+
 int sos_sys_open(const char *path, fmode_t mode)
 {
-    // assert(!"You need to implement this");
     printf("Calling open\n");
-    seL4_SetMR(0, 0);
+    seL4_SetMR(0, SYSCALL_NO_OPEN);
     seL4_SetMR(1, path);
     seL4_SetMR(2, mode);
     seL4_SetMR(3, 0);
@@ -36,13 +51,15 @@ int sos_sys_open(const char *path, fmode_t mode)
 
 int sos_sys_close(int file)
 {
-    assert(!"You need to implement this");
-    return -1;
+    seL4_SetMR(0, SYSCALL_NO_CLOSE);
+    seL4_SetMR(1, file);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 2));
+    return seL4_GetMR(0);
 }
 
 int sos_sys_read(int file, char *buf, size_t nbyte)
 {
-    seL4_SetMR(0, 1);
+    seL4_SetMR(0, SYSCALL_NO_READ);
     seL4_SetMR(1, file);
     seL4_SetMR(2, buf);
     if (nbyte > PAGE_SIZE_4K) nbyte = PAGE_SIZE_4K;
@@ -57,7 +74,7 @@ int sos_sys_read(int file, char *buf, size_t nbyte)
 
 int sos_sys_write(int file, const char *buf, size_t nbyte)
 {
-    seL4_SetMR(0, 2);
+    seL4_SetMR(0, SYSCALL_NO_WRITE);
     seL4_SetMR(1, file);
     seL4_SetMR(2, buf);
     if (nbyte > PAGE_SIZE_4K) nbyte = PAGE_SIZE_4K;
@@ -69,58 +86,59 @@ int sos_sys_write(int file, const char *buf, size_t nbyte)
 
 int sos_getdirent(int pos, char *name, size_t nbyte)
 {
-    assert(!"You need to implement this");
-    return -1;
+    (void) pos;
+    (void) name;
+    (void) nbyte;
+    return unimplemented_syscall();
 }
 
 int sos_stat(const char *path, sos_stat_t *buf)
 {
-    assert(!"You need to implement this");
-    return -1;
+    (void) path;
+    (void) buf;
+    return unimplemented_syscall();
 }
 
 pid_t sos_process_create(const char *path)
 {
-    assert(!"You need to implement this");
-    return -1;
+    (void) path;
+    return unimplemented_syscall();
 }
 
 int sos_process_delete(pid_t pid)
 {
-    assert(!"You need to implement this");
-    return -1;
+    (void) pid;
+    return unimplemented_syscall();
 }
 
 pid_t sos_my_id(void)
 {
-    assert(!"You need to implement this");
-    return -1;
-
+    return unimplemented_syscall();
 }
 
 int sos_process_status(sos_process_t *processes, unsigned max)
 {
-    assert(!"You need to implement this");
-    return -1;
+    (void) processes;
+    (void) max;
+    return unimplemented_syscall();
 }
 
 pid_t sos_process_wait(pid_t pid)
 {
-    assert(!"You need to implement this");
-    return -1;
-
+    (void) pid;
+    return unimplemented_syscall();
 }
 
 void sos_sys_usleep(int msec)
 {
-    seL4_SetMR(0, 4);
+    seL4_SetMR(0, SYSCALL_NO_USLEEP);
     seL4_SetMR(1, msec);
     seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 2));
 }
 
 int64_t sos_sys_time_stamp(void)
 {
-    seL4_SetMR(0, 5);
+    seL4_SetMR(0, SYSCALL_NO_TIME_STAMP);
     seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 1));
     return seL4_GetMR(0);
 }

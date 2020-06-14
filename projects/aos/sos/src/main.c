@@ -90,7 +90,7 @@ NORETURN void syscall_loop(seL4_CPtr ep)
             /* It's a notification from our bound notification
              * object! */
             sos_handle_irq_notification(&badge);
-            seL4_Error err = cspace_delete(&cspace, reply);
+            cspace_delete(&cspace, reply);
             cspace_free_slot(&cspace, reply);
             ut_free(reply_ut);
         } else if (label == seL4_Fault_NullFault) {

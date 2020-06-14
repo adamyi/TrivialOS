@@ -57,7 +57,7 @@ static void console_read_handler(struct serial *serial, char c) {
 }
 
 int console_init() {
-    kbuff = new_rollingarray(20);//PAGE_SIZE_4K);
+    kbuff = new_rollingarray(PAGE_SIZE_4K);
     if (kbuff == NULL) {
         ZF_LOGE("Error can't initialize kbuff");
         return -1;
