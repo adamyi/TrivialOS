@@ -27,7 +27,9 @@ static rollingarray_t *kbuff;
 static queue_t newline_queue;
 static coro_t blocked_reader = NULL;
 
-bool has_reader = false;
+static bool has_reader = false;
+
+static int buffstate = 0; // 0: not full, 1: full without new line, 2: full with new line
 
 static inline bool mode_is_read(seL4_Word flags) {
     seL4_Word accmode = flags & O_ACCMODE;
@@ -43,10 +45,17 @@ static void console_read_handler(struct serial *serial, char c) {
     (void) serial;
     if (!rollingarray_add_item(kbuff, c)) {
         ZF_LOGE("kbuff is full");
+        if (buffstate == 0) buffstate = 1;
+    } else {
+        buffstate = 0;
     }
     if (c == '\n') {
-        // FIXME: what if kbuff is full and there are multiple newlines
-        queue_enqueue(&newline_queue, (void *) ra_ind2idx(kbuff, kbuff->size - 1));
+        switch (buffstate) {
+            case 1:
+            buffstate = 2;
+            case 0:
+            queue_enqueue(&newline_queue, (void *) ra_ind2idx(kbuff, kbuff->size - 1));
+        }
         // check if any read is blocked
         if (blocked_reader) {
             coro_t c = blocked_reader;
