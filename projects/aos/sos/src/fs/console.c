@@ -123,7 +123,7 @@ int console_read(vnode_t *file, struct uio *uio, coro_t me) {
         newline_idx = (size_t) queue_peek(&newline_queue);
     }
     newline_idx = ra_idx2ind(kbuff, newline_idx) + 1;
-    printf("nlidx %lu uio len %lu\n", newline_idx, uio->iovec.len);
+    // ZF_LOGE("nlidx %lu uio len %lu\n", newline_idx, uio->iovec.len);
     if (newline_idx <= uio->iovec.len) {
         queue_dequeue(&newline_queue);
         uio->iovec.len = newline_idx;

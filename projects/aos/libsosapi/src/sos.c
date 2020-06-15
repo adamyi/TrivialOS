@@ -39,7 +39,6 @@ static int unimplemented_syscall() {
 
 int sos_sys_open(const char *path, fmode_t mode)
 {
-    printf("Calling open\n");
     seL4_SetMR(0, SYSCALL_NO_OPEN);
     seL4_SetMR(1, path);
     seL4_SetMR(2, mode);
@@ -66,7 +65,6 @@ int sos_sys_read(int file, char *buf, size_t nbyte)
     seL4_SetMR(3, nbyte);
     seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 4));
     int rc = seL4_GetMR(0);
-    printf("got reply %d\n", rc);
     if (rc > 0)
         memcpy(buf, SHARED_BUFFER_VADDR, rc);
     return rc;

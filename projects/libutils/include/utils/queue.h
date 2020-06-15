@@ -2,9 +2,16 @@
 
 #include <stdbool.h>
 
-#include <utils/list.h>
+typedef struct queue_node {
+    void *data;
+    struct queue_node *next;
+} queue_node_t;
 
-typedef list_t queue_t;
+typedef struct {
+    queue_node_t *head;
+    queue_node_t *tail;
+    size_t len;
+} queue_t;
 
 
 /* Create a new linked-queue. Returns 0 on success. */

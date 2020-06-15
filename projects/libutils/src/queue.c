@@ -14,48 +14,74 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <utils/queue.h>
-#include <utils/list.h>
 
 int queue_init(queue_t *q)
 {
-    return list_init(q);
+    assert(q != NULL);
+    q->head = q->tail = NULL;
+    q->len = 0;
+    return 0;
+}
+
+static queue_node_t *new_node(void *data)
+{
+    queue_node_t *n = malloc(sizeof(queue_node_t));
+    if (n != NULL) {
+        n->next = NULL;
+        n->data = data;
+    }
+    return n;
 }
 
 int queue_enqueue(queue_t *q, void *data)
 {
-    return list_append(q, data);
+    if (q == NULL) return 1;
+    queue_node_t *n = new_node(data);
+    if (n == NULL) return 1;
+    if (q->tail == NULL) {
+        q->head = q->tail = n;
+    } else {
+        q->tail->next = n;
+        q->tail = n;
+    }
+    q->len++;
+    return 0;
 }
 
 void *queue_peek(queue_t *q) {
-    return queue_is_empty(q) ? NULL : ((list_t *) q)->head->data;
+    return queue_is_empty(q) ? NULL : q->head->data;
 }
 
 bool queue_is_empty(queue_t *q)
 {
-    return list_is_empty(q);
+    return q == NULL || q->len == 0;
 }
 
 int queue_length(queue_t *q)
 {
-    return list_length(q);
+    return q->len;
 }
 
 void *queue_dequeue(queue_t *q) {
     if (queue_is_empty(q)) return NULL;
-    struct list_node *delete = ((list_t *) q)->head;
-    ((list_t *) q)->head = delete->next;
-    void *ret = delete->data;
-    free(delete);
+    q->len--;
+    queue_node_t *old = q->head;
+    q->head = q->head->next;
+    if (q->head == NULL) q->tail = NULL;
+    void *ret = old->data;
+    free(old);
     return ret;
 }
 
 int queue_remove_all(queue_t *q)
 {
-    return list_remove_all(q);
+    while (queue_dequeue(q));
+    return 0;
 }
 
 int queue_destroy(queue_t *q)
 {
-    return list_destroy(q);
+    /* Basically do nothing */
+    return 0;
 }
 
