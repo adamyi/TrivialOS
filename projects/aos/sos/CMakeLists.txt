@@ -59,7 +59,9 @@ add_executable(
     src/utils.c
     src/threads.c
     src/process.c
+    src/vm/addrspace.c
     src/vm/pagetable.c
+    src/vm/fault_handler.c
     src/syscalls/syscall.c
     src/syscalls/files.c
     src/syscalls/time.c

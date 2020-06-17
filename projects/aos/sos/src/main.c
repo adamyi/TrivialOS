@@ -42,6 +42,7 @@
 #include "process.h"
 #include "syscalls/syscall.h"
 #include "fs/console.h"
+#include "vm/fault_handler.h"
 
 #include <aos/vsyscall.h>
 
@@ -93,6 +94,9 @@ NORETURN void syscall_loop(seL4_CPtr ep)
             cspace_delete(&cspace, reply);
             cspace_free_slot(&cspace, reply);
             ut_free(reply_ut);
+        } else if (label == seL4_Fault_VMFault) {
+            seL4_Fault_t fault = seL4_getFault(message);
+            handle_vm_fault(&cspace, seL4_Fault_VMFault_get_Addr(fault), seL4_Fault_VMFault_get_FSR(fault), &tty_test_process, reply, reply_ut);
         } else if (label == seL4_Fault_NullFault) {
             /* It's not a fault or an interrupt, it must be an IPC
              * message from tty_test! */

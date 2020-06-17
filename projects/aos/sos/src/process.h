@@ -3,7 +3,10 @@
 #include <cspace/cspace.h>
 #include "vfs/file.h"
 #include "vfs/vfs.h"
+#include "vm/addrspace.h"
+#include "vm/pagetable.h"
 #include "ut.h"
+#include "frame_table.h"
 
 // #define TTY_NAME             "tty_test"
 #define TTY_NAME             "sosh"
@@ -31,9 +34,9 @@ typedef struct process {
     seL4_CPtr sched_context;
 
     cspace_t cspace;
+    addrspace_t *addrspace;
 
-    ut_t *stack_ut;
-    seL4_CPtr stack;
+    frame_ref_t stack_frame;
 
     vnode_t *cwd;
     fdtable_t fdt;
