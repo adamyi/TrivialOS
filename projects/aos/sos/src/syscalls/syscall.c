@@ -5,8 +5,9 @@
 #include "syscall.h"
 #include "files.h"
 #include "time.h"
+#include "memory.h"
 
-#define SYSCALL_NUM (6)
+#define SYSCALL_NUM (7)
 
 static syscall_t *syscalls[SYSCALL_NUM];
 
@@ -20,6 +21,7 @@ void init_syscall() {
     INSTALL_SYSCALL(close);
     INSTALL_SYSCALL(usleep);
     INSTALL_SYSCALL(time_stamp);
+    INSTALL_SYSCALL(brk);
     // did you change SYSCALL_NUM?
 }
 

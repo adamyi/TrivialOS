@@ -65,6 +65,7 @@ add_executable(
     src/syscalls/syscall.c
     src/syscalls/files.c
     src/syscalls/time.c
+    src/syscalls/memory.c
     src/vfs/vfs.c
     src/vfs/uio.c
     src/vfs/file.c

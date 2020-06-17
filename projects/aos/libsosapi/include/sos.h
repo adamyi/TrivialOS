@@ -129,6 +129,10 @@ void sos_sys_usleep(int msec);
 /* Sleeps for the specified number of milliseconds.
  */
 
+long sos_sys_brk(uintptr_t newbrk);
+/* Trivial
+ */
+
 
 /*************************************************************************/
 /*                                   */

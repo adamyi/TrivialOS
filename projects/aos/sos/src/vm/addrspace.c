@@ -38,15 +38,15 @@ void as_destroy(addrspace_t *as) {
     free(as);
 }
 
-int as_define_stack(struct addrspace *as, size_t sz) {
+int as_define_stack(struct addrspace *as, vaddr_t bottom, size_t sz) {
     assert(as->stack == NULL);
-    return as_define_region(as, PROCESS_STACK_TOP - sz, sz, seL4_ReadWrite,
+    return as_define_region(as, bottom - sz, sz, seL4_ReadWrite,
                 seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, &(as->stack));
 }
 
-int as_define_heap(struct addrspace *as, size_t sz) {
+int as_define_heap(struct addrspace *as, vaddr_t start) {
     assert(as->heap == NULL);
-    return as_define_region(as, PROCESS_VMEM_START, sz, seL4_ReadWrite,
+    return as_define_region(as, start, 0, seL4_ReadWrite,
                 seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, &(as->heap));
 }
 

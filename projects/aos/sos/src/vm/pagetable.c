@@ -193,3 +193,22 @@ seL4_CPtr alloc_map_frame(addrspace_t *as, cspace_t *cspace, seL4_CPtr vspace, s
 
     return frame_cptr;
 }
+
+void unalloc_frame(addrspace_t *as, cspace_t *cspace, vaddr_t vaddr) {
+    pte_t *pte = get_pte(as, vaddr, false);
+    if (pte) {
+        /* unmap our pte */
+        seL4_Error err = seL4_ARM_Page_Unmap(pte->cap);
+        assert(err == seL4_NoError);
+
+        /* delete the frame cap */
+        err = cspace_delete(cspace, pte->cap);
+        assert(err == seL4_NoError);
+
+        /* mark the slot as free */
+        cspace_free_slot(cspace, pte->cap);
+
+        /* Free allocated */
+        ut_free(pte->ut);
+    }
+}

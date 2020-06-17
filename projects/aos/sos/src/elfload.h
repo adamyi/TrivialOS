@@ -16,4 +16,6 @@
 #include <elf/elf.h>
 #include <elf.h>
 
-int elf_load(cspace_t *cspace, seL4_CPtr loadee_vspace, elf_t *elf_file);
+#include "vm/addrspace.h"
+
+int elf_load(cspace_t *cspace, seL4_CPtr loadee_vspace, elf_t *elf_file, vaddr_t *end);

@@ -27,6 +27,7 @@
 #define SYSCALL_NO_CLOSE      (3)
 #define SYSCALL_NO_USLEEP     (4)
 #define SYSCALL_NO_TIME_STAMP (5)
+#define SYSCALL_NO_BRK        (6)
 
 #define SYSCALL_NO_UNIMPL     (100)
 
@@ -138,5 +139,12 @@ int64_t sos_sys_time_stamp(void)
 {
     seL4_SetMR(0, SYSCALL_NO_TIME_STAMP);
     seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 1));
+    return seL4_GetMR(0);
+}
+
+long sos_sys_brk(uintptr_t newbrk) {
+    seL4_SetMR(0, SYSCALL_NO_BRK);
+    seL4_SetMR(1, newbrk);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 2));
     return seL4_GetMR(0);
 }

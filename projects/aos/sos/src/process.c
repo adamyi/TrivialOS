@@ -50,7 +50,7 @@ static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, el
         return 0;
     }
 
-    int err = as_define_stack(tty_test_process.addrspace, MAX_STACK_SIZE);
+    int err = as_define_stack(tty_test_process.addrspace, PROCESS_STACK_TOP, MAX_STACK_SIZE);
     if (err) {
         ZF_LOGE("could not create stack region");
         return 0;
@@ -337,11 +337,20 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
     /* set up the stack */
     seL4_Word sp = init_process_stack(cspace, seL4_CapInitThreadVSpace, &elf_file);
 
+    vaddr_t heap_start;
+
     /* load the elf image from the cpio file */
-    err = elf_load(cspace, tty_test_process.vspace, &elf_file);
+    err = elf_load(cspace, tty_test_process.vspace, &elf_file, &heap_start);
     if (err) {
         ZF_LOGE("Failed to load elf image");
         return false;
+    }
+
+    /* set up the heap */
+    err = as_define_heap(tty_test_process.addrspace, heap_start);
+    if (err) {
+        ZF_LOGE("Failed to define heap region");
+        return 0;
     }
 
     /* Map in the IPC buffer for the thread */

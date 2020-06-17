@@ -13,7 +13,7 @@
 
 #include <utils/page.h>
 
-#define NPAGES 270
+#define NPAGES 20
 #define TEST_ADDRESS 0x8000000000
 
 #include <assert.h>
@@ -63,7 +63,7 @@ pt_test( void )
     /* stack test */
     do_pt_test(buf1);
 
-    return;
+    // return;
 
     /* heap test */
     buf2 = malloc(NPAGES * PAGE_SIZE_4K);

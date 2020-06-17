@@ -35,3 +35,4 @@ page_table_t *create_pt();
 pte_t *get_pte(addrspace_t *as, vaddr_t vaddr, bool create);
 seL4_CPtr alloc_map_frame(addrspace_t *as, cspace_t *cspace, seL4_CPtr vspace, seL4_Word vaddr,
                     seL4_CapRights_t rights, seL4_ARM_VMAttributes attrs);
+void unalloc_frame(addrspace_t *as, cspace_t *cspace, vaddr_t vaddr);

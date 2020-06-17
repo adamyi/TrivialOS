@@ -24,7 +24,7 @@ typedef struct addrspace {
 
 addrspace_t *as_create();
 void as_destroy(addrspace_t *as);
-int as_define_stack(struct addrspace *as, size_t sz);
-int as_define_heap(struct addrspace *as, size_t sz);
+int as_define_stack(struct addrspace *as, vaddr_t bottom, size_t sz);
+int as_define_heap(struct addrspace *as, vaddr_t start);
 int as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
         seL4_CapRights_t rights, seL4_ARM_VMAttributes attrs, region_t **ret);

@@ -164,8 +164,8 @@ static int load_segment_into_vspace(cspace_t *cspace, seL4_CPtr loadee, char *sr
     return 0;
 }
 
-int elf_load(cspace_t *cspace, seL4_CPtr loadee_vspace, elf_t *elf_file)
-{
+int elf_load(cspace_t *cspace, seL4_CPtr loadee_vspace, elf_t *elf_file, vaddr_t *end) {
+    *end = 0;
 
     int num_headers = elf_getNumProgramHeaders(elf_file);
     for (int i = 0; i < num_headers; i++) {
@@ -190,6 +190,7 @@ int elf_load(cspace_t *cspace, seL4_CPtr loadee_vspace, elf_t *elf_file)
             ZF_LOGE("Elf loading failed!");
             return -1;
         }
+        if (vaddr + segment_size > *end) *end = vaddr + segment_size;
     }
 
     return 0;
