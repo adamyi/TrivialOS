@@ -60,7 +60,7 @@ static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, el
 
     /* Create a stack frame */
     seL4_CPtr stack_frame_cptr = alloc_map_frame(tty_test_process.addrspace, cspace, tty_test_process.vspace, stack_bottom,
-                                       seL4_ReadWrite, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
+                                       seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
     
     printf("ssssssss\n");
 
@@ -87,7 +87,7 @@ static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, el
     }
 
     /* map it into the sos address space */
-    err = map_frame(cspace, local_stack_cptr, local_vspace, local_stack_bottom, seL4_ReadWrite,
+    err = map_frame(cspace, local_stack_cptr, local_vspace, local_stack_bottom, seL4_AllRights,
                     seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
     if (err != seL4_NoError) {
         cspace_delete(cspace, local_stack_cptr);
@@ -147,7 +147,7 @@ static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, el
     /*for (int page = 0; page < INITIAL_PROCESS_EXTRA_STACK_PAGES; page++) {
         stack_bottom -= PAGE_SIZE_4K;
         seL4_CPtr frame_cptr = alloc_map_frame(tty_test_process.addrspace, cspace, tty_test_process.vspace, stack_bottom,
-                                        seL4_ReadWrite, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
+                                        seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
         if (frame_cptr == seL4_CapNull) {
             ZF_LOGE("Couldn't allocate additional stack frame");
             return 0;
@@ -195,7 +195,7 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
     printf(":)\n");
 
     /* Create an IPC buffer */
-    err = as_define_region(tty_test_process.addrspace, PROCESS_IPC_BUFFER, PAGE_SIZE_4K, seL4_ReadWrite,
+    err = as_define_region(tty_test_process.addrspace, PROCESS_IPC_BUFFER, PAGE_SIZE_4K, seL4_AllRights,
                 seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, NULL);
     if (err) {
         ZF_LOGE("Failed to define IPC region");
@@ -204,14 +204,14 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
 
     /* Create an IPC frame */
     tty_test_process.ipc_buffer = alloc_map_frame(tty_test_process.addrspace, cspace, tty_test_process.vspace, PROCESS_IPC_BUFFER,
-                                        seL4_ReadWrite, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
+                                        seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
     if (tty_test_process.ipc_buffer == seL4_CapNull) {
         ZF_LOGE("Failed to alloc map IPC frame");
         return 0;
     }
 
     /* Create a shared buffer */
-    err = as_define_region(tty_test_process.addrspace, PROCESS_IPC_BUFFER + PAGE_SIZE_4K, PAGE_SIZE_4K, seL4_ReadWrite,
+    err = as_define_region(tty_test_process.addrspace, PROCESS_IPC_BUFFER + PAGE_SIZE_4K, PAGE_SIZE_4K, seL4_AllRights,
                 seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, NULL);
     if (err) {
         ZF_LOGE("Failed to define shared buffer region");
@@ -220,7 +220,7 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
 
     /* Create an sb frame */
     tty_test_process.shared_buffer = alloc_map_frame(tty_test_process.addrspace, cspace, tty_test_process.vspace, PROCESS_IPC_BUFFER + PAGE_SIZE_4K,
-                                        seL4_ReadWrite, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
+                                        seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
     if (tty_test_process.shared_buffer == seL4_CapNull) {
         ZF_LOGE("Failed to alloc map sb frame");
         return 0;
@@ -244,7 +244,7 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
     /* map it into the sos address space */
     tty_test_process.shared_buffer_vaddr = get_new_shared_buffer_vaddr();
     printf("map shit\n");
-    err = map_frame(cspace, local_shared_cptr, seL4_CapInitThreadVSpace, tty_test_process.shared_buffer_vaddr, seL4_ReadWrite,
+    err = map_frame(cspace, local_shared_cptr, seL4_CapInitThreadVSpace, tty_test_process.shared_buffer_vaddr, seL4_AllRights,
                     seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
     printf("map shit\n");
 
@@ -266,7 +266,7 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
     }
 
     /* now mutate the cap, thereby setting the badge */
-    err = cspace_mint(&tty_test_process.cspace, user_ep, cspace, ep, seL4_ReadWrite, TTY_EP_BADGE);
+    err = cspace_mint(&tty_test_process.cspace, user_ep, cspace, ep, seL4_AllRights, TTY_EP_BADGE);
     if (err) {
         ZF_LOGE("Failed to mint user ep");
         return false;
@@ -355,7 +355,7 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
 
     /* Map in the IPC buffer for the thread */
     err = sos_map_frame(tty_test_process.addrspace, cspace, tty_test_process.ipc_buffer, tty_test_process.vspace, PROCESS_IPC_BUFFER,
-                    seL4_ReadWrite, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
+                    seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
     if (err != 0) {
         ZF_LOGE("Unable to map IPC buffer for user app");
         return false;
@@ -363,7 +363,7 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
 
     /* Map in the shared buffer for the thread */
     err = sos_map_frame(tty_test_process.addrspace, cspace, tty_test_process.shared_buffer, tty_test_process.vspace, PROCESS_IPC_BUFFER + PAGE_SIZE_4K,
-                    seL4_ReadWrite, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
+                    seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
     if (err != 0) {
         printf("%d\n", err);
         ZF_LOGE("Unable to map shared buffer for user app");

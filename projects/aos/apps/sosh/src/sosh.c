@@ -13,7 +13,8 @@
 
 #include <utils/page.h>
 
-#define NPAGES 1000
+#define NPAGES_STACK 1000
+#define NPAGES_HEAP 20
 #define TEST_ADDRESS 0x8000000000
 
 #include <assert.h>
@@ -34,18 +35,18 @@
 
 /* called from pt_test */
 static void
-do_pt_test(int *buf)
+do_pt_test(int *buf, int np)
 {
     int i;
 
     /* set */
-    for (int i = 0; i < NPAGES; i++) {
+    for (int i = 0; i < np; i++) {
       printf("setting %d\n", i);
       buf[i * PAGE_SIZE_4K / 4] = i;
     }
 
     /* check */
-    for (int i = 0; i < NPAGES; i++) {
+    for (int i = 0; i < np; i++) {
       printf("testing %d\n", i);
       assert(buf[i * PAGE_SIZE_4K / 4] == i);
     }
@@ -55,20 +56,20 @@ static void
 pt_test( void )
 {
     /* need a decent sized stack */
-    int buf1[NPAGES * PAGE_SIZE_4K / 4], *buf2 = NULL;
+    int buf1[NPAGES_STACK * PAGE_SIZE_4K / 4], *buf2 = NULL;
 
     /* check the stack is above phys mem */
     assert((void *) buf1 > (void *) TEST_ADDRESS);
 
     /* stack test */
-    do_pt_test(buf1);
+    do_pt_test(buf1, NPAGES_STACK);
 
-    return;
+    // return;
 
     /* heap test */
-    buf2 = malloc(NPAGES * PAGE_SIZE_4K);
+    buf2 = malloc(NPAGES_HEAP * PAGE_SIZE_4K);
     assert(buf2);
-    do_pt_test(buf2);
+    do_pt_test(buf2, NPAGES_HEAP);
     free(buf2);
 }
 
