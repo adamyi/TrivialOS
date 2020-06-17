@@ -13,7 +13,7 @@
 
 #include <utils/page.h>
 
-#define NPAGES_STACK 1000
+#define NPAGES_STACK 10
 #define NPAGES_HEAP 20
 #define TEST_ADDRESS 0x8000000000
 
@@ -80,9 +80,8 @@ static int in;
 static sos_stat_t sbuf;
 
 #define SMALL_BUF_SZ 2
-#define MEDIUM_BUF_SZ 256
+#define MEDIUM_BUF_SZ 10000
 
-char test_str[] = "Basic test string for read/write";
 char small_buf[SMALL_BUF_SZ];
 
 static size_t sos_debug_print(const void *vData, size_t count)
@@ -371,6 +370,7 @@ struct command commands[] = { { "dir", dir }, { "ls", dir }, { "cat", cat }, {
 
 int test_buffers(int console_fd) {
    /* test a small string from the code segment */
+   char test_str[] = "Basic test string for read/write";
    int result = sos_sys_write(console_fd, test_str, strlen(test_str));
    printf("res %d strlen %d\n", result, strlen(test_str));
    assert(result == strlen(test_str));
@@ -385,10 +385,10 @@ int test_buffers(int console_fd) {
    /* for this test you'll need to paste a lot of data into
       the console, without newlines */
 
-   result = sos_sys_read(console_fd, &stack_buf, MEDIUM_BUF_SZ);
+   result = sos_sys_read(console_fd, stack_buf, MEDIUM_BUF_SZ);
    assert(result == MEDIUM_BUF_SZ);
 
-   result = sos_sys_write(console_fd, &stack_buf, MEDIUM_BUF_SZ);
+   result = sos_sys_write(console_fd, stack_buf, MEDIUM_BUF_SZ);
    assert(result == MEDIUM_BUF_SZ);
 
    /* try sleeping */
@@ -406,6 +406,24 @@ int main(void)
 {
     /* set up the c library. printf will not work before this is called */
     sosapi_init_syscall_table();
+    char console[20];
+    strcpy(console, "console");
+
+    int iin = open(console, O_RDWR);
+    char xxx[2040];
+    char bbp[10000];
+
+    while(1) {
+        int ret = read(iin, bbp, 10000);
+        printf("read returned %d\n", ret);
+        if (ret == -1) {
+            //printf("errno: %d\n", errno);
+            printf("err\n");
+            while(1);
+        }
+        bbp[ret] = '\0';
+        printf("===%s===\n", bbp);
+    }
 
     printf("hello world\n");
     pt_test();
@@ -417,9 +435,9 @@ int main(void)
 
     printf("hello world\n");
 
-    in = open("console", O_RDWR);
+    in = open(console, O_RDWR);
 
-    printf("world says hello back\n");
+    printf("world says hello back %d\n", in);
 
     assert(in >= 0);
 

@@ -54,7 +54,7 @@ static void *_handle_syscall_impl(void *args) {
         reply_msg = return_error();
     } else {
         ZF_LOGE("Calling syscall %s\n", syscalls[syscall_number]->name);
-        reply_msg = syscalls[syscall_number]->implementation(sargs->proc, sargs->coro);
+        reply_msg = syscalls[syscall_number]->implementation(cspace, sargs->proc, sargs->coro);
     }
     seL4_Send(reply, reply_msg);
     cspace_delete(cspace, reply);

@@ -9,6 +9,8 @@
 #include "../coroutine/picoro.h"
 #include <sel4/sel4.h>
 
+#define CONSOLE_BUFFER_SIZE (PAGE_SIZE_4K)
+
 vnode_ops_t console_ops = {
                 .vop_open    = NULL, 
                 .vop_read    = console_read,
@@ -66,7 +68,7 @@ static void console_read_handler(struct serial *serial, char c) {
 }
 
 int console_init() {
-    kbuff = new_rollingarray(PAGE_SIZE_4K);
+    kbuff = new_rollingarray(CONSOLE_BUFFER_SIZE);
     if (kbuff == NULL) {
         ZF_LOGE("Error can't initialize kbuff");
         return -1;
@@ -111,7 +113,7 @@ int console_open(vnode_t *object, char *pathname, int flags_from_open, vnode_t *
 int console_read(vnode_t *file, struct uio *uio, coro_t me) {
     if (!mode_is_read((seL4_Word) file->data)) {
         ZF_LOGE("Calling read on non-reader console vnode");
-        return 0;
+        return -1;
     }
     size_t newline_idx = (size_t) queue_peek(&newline_queue);
     if (newline_idx == 0) { //NULL
@@ -128,13 +130,15 @@ int console_read(vnode_t *file, struct uio *uio, coro_t me) {
         queue_dequeue(&newline_queue);
         uio->iovec.len = newline_idx;
     }
-    rollingarray_to_array(kbuff, (char *)uio->iovec.base, false, uio->iovec.len);
+    ZF_LOGE("hh %p %d\n", uio->iovec.base, uio->iovec.len);
+    uio->iovec.len = rollingarray_to_array(kbuff, (char *)uio->iovec.base, false, uio->iovec.len);
+    ZF_LOGE("hh %d\n", uio->iovec.len);
     kbuff->start += uio->iovec.len;
     if (kbuff->start >= kbuff->capacity) kbuff->start -= kbuff->capacity;
     kbuff->size -= uio->iovec.len;
     printf("remaining size %lu\n", kbuff->size);
-    ((char *)uio->iovec.base)[uio->iovec.len] = '\0';
-    printf("read %s\n", (char *)uio->iovec.base);
+    // ((char *)uio->iovec.base)[uio->iovec.len] = '\0';
+    // printf("read %s\n", (char *)uio->iovec.base);
     return uio->iovec.len;
 }
 
@@ -142,7 +146,7 @@ int console_write(vnode_t *file, struct uio *uio, coro_t me) {
     (void) me;
     if (!mode_is_write((seL4_Word) file->data)) {
         ZF_LOGE("Calling write on non-writer console vnode");
-        return 0;
+        return -1;
     }
     return serial_send(handle, uio->iovec.base, uio->iovec.len);
 }

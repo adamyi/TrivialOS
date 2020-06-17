@@ -26,6 +26,7 @@
 #define SOS_UT_TABLE         (0x8000000000)
 #define SOS_FRAME_TABLE      (0x8100000000)
 #define SOS_FRAME_DATA       (0x8200000000)
+#define SOS_PROC_VADDR_MAP   (0x9000000000)
 
 /* Constants for how SOS will layout the address space of any processes it loads up */
 #define PROCESS_STACK_BOTTOM (0x9000000000)

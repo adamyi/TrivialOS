@@ -74,10 +74,13 @@ size_t rollingarray_to_array(rollingarray_t *ra, ra_item_t arr[], bool reversed,
             arr[j] = ra->value[i];
     } else {
         for (int i = (int)ra->start, j = 0; j < len;
-                 i = (i + 1 == (int)ra->capacity ? 0 : i + 1), j++)
+                 i = (i + 1 == (int)ra->capacity ? 0 : i + 1), j++) {
             arr[j] = ra->value[i];
+        }
     }
-    for (int i = ra->size; i < ra->capacity; i++) arr[i] = RA_UNKNOWN_ITEM;
+    for (int i = ra->size; i < len; i++) {
+        arr[i] = RA_UNKNOWN_ITEM;
+    }
     return len;
 }
 

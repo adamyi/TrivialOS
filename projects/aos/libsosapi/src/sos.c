@@ -42,9 +42,9 @@ int sos_sys_open(const char *path, fmode_t mode)
 {
     seL4_SetMR(0, SYSCALL_NO_OPEN);
     seL4_SetMR(1, path);
-    seL4_SetMR(2, mode);
-    seL4_SetMR(3, 0);
-    memcpy(SHARED_BUFFER_VADDR, path, PAGE_SIZE_4K);
+    seL4_SetMR(2, strlen(path));
+    seL4_SetMR(3, mode);
+    // seL4_SetMR(3, 0);
     seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 4));
     return seL4_GetMR(0);
 }
@@ -62,13 +62,9 @@ int sos_sys_read(int file, char *buf, size_t nbyte)
     seL4_SetMR(0, SYSCALL_NO_READ);
     seL4_SetMR(1, file);
     seL4_SetMR(2, buf);
-    if (nbyte > PAGE_SIZE_4K) nbyte = PAGE_SIZE_4K;
     seL4_SetMR(3, nbyte);
     seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 4));
-    int rc = seL4_GetMR(0);
-    if (rc > 0)
-        memcpy(buf, SHARED_BUFFER_VADDR, rc);
-    return rc;
+    return seL4_GetMR(0);
 }
 
 int sos_sys_write(int file, const char *buf, size_t nbyte)
@@ -76,9 +72,7 @@ int sos_sys_write(int file, const char *buf, size_t nbyte)
     seL4_SetMR(0, SYSCALL_NO_WRITE);
     seL4_SetMR(1, file);
     seL4_SetMR(2, buf);
-    if (nbyte > PAGE_SIZE_4K) nbyte = PAGE_SIZE_4K;
     seL4_SetMR(3, nbyte);
-    memcpy(SHARED_BUFFER_VADDR, buf, PAGE_SIZE_4K);
     seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 4));
     return seL4_GetMR(0);
 }

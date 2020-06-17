@@ -9,7 +9,7 @@
 
 #define SYSCALL_IMPL_(name) _syscall_##name##_impl
 
-#define SYSCALL_PARAMS process_t *proc, coro_t me
+#define SYSCALL_PARAMS cspace_t *cspace, process_t *proc, coro_t me
 
 #define DEFINE_SYSCALL(syscall_name) \
     seL4_MessageInfo_t SYSCALL_IMPL_(syscall_name)(SYSCALL_PARAMS); \

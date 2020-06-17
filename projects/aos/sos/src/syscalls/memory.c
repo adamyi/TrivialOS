@@ -15,9 +15,10 @@ IMPLEMENT_SYSCALL(brk, 1) {
     vaddr_t vaddr = seL4_GetMR(1);
     region_t *heap = proc->addrspace->heap;
     assert(heap->next != NULL);
-    if (heap->vbase <= vaddr && vaddr <= heap->next->vbase) {
+    // NOTES: this is different from the actual Linux syscall: we require brk to align
+    // this is for simplicity reasons
+    if (IS_ALIGNED_4K(vaddr) && heap->vbase <= vaddr && vaddr <= heap->next->vbase) {
         for (vaddr_t curr = IS_ALIGNED_4K(vaddr) ? vaddr : PAGE_ALIGN_4K(vaddr) + 1; curr < heap->vbase + heap->memsize; curr += PAGE_SIZE_4K) {
-            /* Unmap frames */
             unalloc_frame(proc->addrspace, &(proc->cspace), curr);
         }
         heap->memsize = vaddr - heap->vbase;

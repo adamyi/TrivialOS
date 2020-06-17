@@ -67,7 +67,7 @@ void handle_vm_fault(cspace_t *cspace, void *vaddr, seL4_Word type, process_t *c
 
     pte_t *pte = get_pte(as, (vaddr_t) vaddr, false);
 
-    if (pte == NULL) {
+    if (pte == NULL || pte->cap == seL4_CapNull) {
         /* Alloc frame */
         seL4_CPtr frame_cptr = alloc_map_frame(curr->addrspace, cspace, curr->vspace, (vaddr_t) vaddr, region->rights, region->attrs);
         if (frame_cptr == seL4_CapNull) {

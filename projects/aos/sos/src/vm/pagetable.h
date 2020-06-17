@@ -36,3 +36,6 @@ pte_t *get_pte(addrspace_t *as, vaddr_t vaddr, bool create);
 seL4_CPtr alloc_map_frame(addrspace_t *as, cspace_t *cspace, seL4_CPtr vspace, seL4_Word vaddr,
                     seL4_CapRights_t rights, seL4_ARM_VMAttributes attrs);
 void unalloc_frame(addrspace_t *as, cspace_t *cspace, vaddr_t vaddr);
+void *map_vaddr_to_sos(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, seL4_CPtr *local_cptr, size_t *size);
+void unmap_vaddr_from_sos(cspace_t *cspace, seL4_CPtr local_cptr);
+int copy_in(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, size_t size, void *dest);
