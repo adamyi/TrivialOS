@@ -28,6 +28,6 @@
 #define SOS_FRAME_DATA       (0x8200000000)
 
 /* Constants for how SOS will layout the address space of any processes it loads up */
-#define PROCESS_STACK_TOP   (0x9000000000)
-#define PROCESS_IPC_BUFFER  (0xA000000000)
-#define PROCESS_VMEM_START  (0xC000000000)
+#define PROCESS_STACK_BOTTOM (0x9000000000)
+#define PROCESS_IPC_BUFFER   (0xA000000000)
+#define PROCESS_VMEM_START   (0xC000000000)

@@ -33,23 +33,15 @@ page_table_t *create_pt() {
 }
 
 static page_table_t *get_pt_level(addrspace_t *as, vaddr_t addr, int level, bool create) {
-    printf("get_pt\n");
     page_table_t *pt = as->pagetable;
     for (int i = PAGE_TABLE_LEVELS - 2; i >= level; i--) {
-        printf("pt %p\n", pt);
         seL4_Word idx = get_vaddr_level_idx(addr, i);
-        printf("aaa\n");
-        printf("%ld %d\n", idx, PAGE_TABLE_LEVEL_SIZE);
-        printf("%p\n", pt->entries[idx]);
         if (pt->entries[idx] == NULL) {
             if (!create) return NULL;
             pt->entries[idx] = create_pt();
         }
-        printf("%p\n", pt->entries[idx]);
         pt = pt->entries[idx];
-        printf(":)\n");
     }
-    printf("get_pt fin\n");
     return pt;
 }
 
@@ -62,7 +54,7 @@ static seL4_Error retype_pt(cspace_t *cspace, seL4_CPtr vspace, seL4_Word vaddr,
 static seL4_Error map_frame_impl(addrspace_t *as, cspace_t *cspace, seL4_CPtr frame_cap, seL4_CPtr vspace, seL4_Word vaddr,
                                  seL4_CapRights_t rights, seL4_ARM_VMAttributes attr,
                                  seL4_CPtr *free_slots, seL4_Word *used) {
-    printf("Mapping %p\n", vaddr);
+    ZF_LOGI("Mapping %p\n", vaddr);
     /* Attempt the mapping */
     seL4_Error err = seL4_ARM_Page_Map(frame_cap, vspace, vaddr, rights, attr);
     for (size_t i = 0; i < MAPPING_SLOTS && err == seL4_FailedLookup; i++) {
@@ -125,9 +117,7 @@ static seL4_Error map_frame_impl(addrspace_t *as, cspace_t *cspace, seL4_CPtr fr
 
     if (!err) {
         /* Create PTE */
-        printf("FFFFFFFFFFF\n");
         pte_t *pte = get_pte(as, vaddr, true);
-        printf("HHHHHHHHHHHHHHHHHHHH\n");
         if (pte == NULL) err = seL4_NotEnoughMemory;
         else {
             pte->cap = frame_cap;
@@ -147,12 +137,9 @@ seL4_Error sos_map_frame(addrspace_t *as, cspace_t *cspace, seL4_CPtr frame_cap,
 pte_t *get_pte(addrspace_t *as, vaddr_t vaddr, bool create) {
    page_table_t *pdt = get_pt_level(as, vaddr, 1, create);
    if (pdt == NULL) return NULL;
-   printf("MMMMMMMMMMMMMMMMMM %ld\n", get_vaddr_level_idx(vaddr, 0));
    pte_t **pte = (pte_t **) &(pdt->entries[get_vaddr_level_idx(vaddr, 0)]);
-   printf("BBBBBBBBBBBBBB\n");
    if (!create || *pte != NULL) return *pte;
    *pte = malloc(sizeof(pte_t));
-   printf("GGGGGGGG\n");
    return *pte;
 }
 

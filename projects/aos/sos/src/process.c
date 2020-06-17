@@ -35,12 +35,12 @@ static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, el
 {
 
     /* virtual addresses in the target process' address space */
-    uintptr_t stack_top = PROCESS_STACK_TOP;
-    uintptr_t stack_bottom = PROCESS_STACK_TOP - PAGE_SIZE_4K;
-    /* virtual addresses in the SOS's address space */
-    void *local_stack_top  = (seL4_Word *) SOS_SCRATCH;
-    uintptr_t local_stack_bottom = SOS_SCRATCH - PAGE_SIZE_4K;
+    uintptr_t stack_bottom = PROCESS_STACK_BOTTOM;
+    uintptr_t stack_top = PROCESS_STACK_BOTTOM - PAGE_SIZE_4K;
 
+    /* virtual addresses in the SOS's address space */
+    void *local_stack_bottom  = (seL4_Word *) SOS_SCRATCH;
+    uintptr_t local_stack_top = SOS_SCRATCH - PAGE_SIZE_4K;
 
 
     /* find the vsyscall table */
@@ -50,7 +50,7 @@ static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, el
         return 0;
     }
 
-    int err = as_define_stack(tty_test_process.addrspace, PROCESS_STACK_TOP, PAGE_SIZE_4K);
+    int err = as_define_stack(tty_test_process.addrspace, PROCESS_STACK_BOTTOM, PAGE_SIZE_4K);
     if (err) {
         ZF_LOGE("could not create stack region");
         return 0;
@@ -59,7 +59,7 @@ static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, el
     printf("bright day\n");
 
     /* Create a stack frame */
-    seL4_CPtr stack_frame_cptr = alloc_map_frame(tty_test_process.addrspace, cspace, tty_test_process.vspace, stack_bottom,
+    seL4_CPtr stack_frame_cptr = alloc_map_frame(tty_test_process.addrspace, cspace, tty_test_process.vspace, stack_top,
                                        seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
     
     printf("ssssssss\n");
@@ -87,7 +87,7 @@ static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, el
     }
 
     /* map it into the sos address space */
-    err = map_frame(cspace, local_stack_cptr, local_vspace, local_stack_bottom, seL4_AllRights,
+    err = map_frame(cspace, local_stack_cptr, local_vspace, local_stack_top, seL4_AllRights,
                     seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
     if (err != seL4_NoError) {
         cspace_delete(cspace, local_stack_cptr);
@@ -98,39 +98,39 @@ static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, el
     int index = -2;
 
     /* null terminate the aux vectors */
-    index = stack_write(local_stack_top, index, 0);
-    index = stack_write(local_stack_top, index, 0);
+    index = stack_write(local_stack_bottom, index, 0);
+    index = stack_write(local_stack_bottom, index, 0);
 
     /* write the aux vectors */
-    index = stack_write(local_stack_top, index, PAGE_SIZE_4K);
-    index = stack_write(local_stack_top, index, AT_PAGESZ);
+    index = stack_write(local_stack_bottom, index, PAGE_SIZE_4K);
+    index = stack_write(local_stack_bottom, index, AT_PAGESZ);
 
-    index = stack_write(local_stack_top, index, sysinfo);
-    index = stack_write(local_stack_top, index, AT_SYSINFO);
+    index = stack_write(local_stack_bottom, index, sysinfo);
+    index = stack_write(local_stack_bottom, index, AT_SYSINFO);
 
-    index = stack_write(local_stack_top, index, PROCESS_IPC_BUFFER);
-    index = stack_write(local_stack_top, index, AT_SEL4_IPC_BUFFER_PTR);
+    index = stack_write(local_stack_bottom, index, PROCESS_IPC_BUFFER);
+    index = stack_write(local_stack_bottom, index, AT_SEL4_IPC_BUFFER_PTR);
 
     /* null terminate the environment pointers */
-    index = stack_write(local_stack_top, index, 0);
+    index = stack_write(local_stack_bottom, index, 0);
 
     /* we don't have any env pointers - skip */
 
     /* null terminate the argument pointers */
-    index = stack_write(local_stack_top, index, 0);
+    index = stack_write(local_stack_bottom, index, 0);
 
     /* no argpointers - skip */
 
     /* set argc to 0 */
-    stack_write(local_stack_top, index, 0);
+    stack_write(local_stack_bottom, index, 0);
 
-    /* adjust the initial stack top */
-    stack_top += (index * sizeof(seL4_Word));
+    /* adjust the initial stack bottom */
+    stack_bottom += (index * sizeof(seL4_Word));
 
     /* the stack *must* remain aligned to a double word boundary,
      * as GCC assumes this, and horrible bugs occur if this is wrong */
     assert(index % 2 == 0);
-    assert(stack_top % (sizeof(seL4_Word) * 2) == 0);
+    assert(stack_bottom % (sizeof(seL4_Word) * 2) == 0);
 
     /* unmap our copy of the stack */
     err = seL4_ARM_Page_Unmap(local_stack_cptr);
@@ -145,8 +145,8 @@ static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, el
 
     /* Exend the stack with extra pages */
     /*for (int page = 0; page < INITIAL_PROCESS_EXTRA_STACK_PAGES; page++) {
-        stack_bottom -= PAGE_SIZE_4K;
-        seL4_CPtr frame_cptr = alloc_map_frame(tty_test_process.addrspace, cspace, tty_test_process.vspace, stack_bottom,
+        stack_top -= PAGE_SIZE_4K;
+        seL4_CPtr frame_cptr = alloc_map_frame(tty_test_process.addrspace, cspace, tty_test_process.vspace, stack_top,
                                         seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
         if (frame_cptr == seL4_CapNull) {
             ZF_LOGE("Couldn't allocate additional stack frame");
@@ -154,7 +154,7 @@ static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, el
         }
     }*/
 
-    return stack_top;
+    return stack_bottom;
 }
 
 /* Start the first process, and return true if successful

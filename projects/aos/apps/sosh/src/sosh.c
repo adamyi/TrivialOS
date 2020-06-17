@@ -409,12 +409,6 @@ int main(void)
 
     printf("hello world\n");
     pt_test();
-    return 0;
-
-    char *x = 0xA0001000;
-    printf("%p %d\n", x, *x);
-    return 0;
-
 
     char buf[BUF_SIZ];
     char *argv[MAX_ARGS];
