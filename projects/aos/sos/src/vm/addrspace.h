@@ -11,6 +11,7 @@ typedef struct region {
     seL4_CapRights_t rights;
     seL4_ARM_VMAttributes attrs;
     vaddr_t vbase;
+    struct region *prev;
     struct region *next;
     size_t memsize;
 } region_t;

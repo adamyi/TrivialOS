@@ -19,7 +19,7 @@ region_t *region_create(vaddr_t vaddr, size_t sz,
     r->memsize = sz;
     r->rights = rights;
     r->attrs = attrs;
-    r->next = NULL;
+    r->prev = r->next = NULL;
     return r;
 }
 
@@ -66,6 +66,10 @@ int as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
         return -ENOMEM;
 
     new_region->next = *curr;
+    if (*curr != NULL) {
+        new_region->prev = (*curr)->prev;
+        (*curr)->prev = new_region;
+    }
     *curr = new_region;
     if (ret != NULL) *ret = new_region;
     return 0;
