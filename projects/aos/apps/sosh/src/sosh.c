@@ -11,6 +11,11 @@
  */
 /* Simple shell to run on SOS */
 
+#include <utils/page.h>
+
+#define NPAGES 270
+#define TEST_ADDRESS 0x8000000000
+
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
@@ -26,6 +31,46 @@
 #include <sos.h>
 
 #include "benchmark.h"
+
+/* called from pt_test */
+static void
+do_pt_test(int *buf)
+{
+    int i;
+
+    /* set */
+    for (int i = 0; i < NPAGES; i++) {
+      printf("setting %d\n", i);
+      buf[i * PAGE_SIZE_4K / 4] = i;
+    }
+
+    /* check */
+    for (int i = 0; i < NPAGES; i++) {
+      printf("testing %d\n", i);
+      assert(buf[i * PAGE_SIZE_4K / 4] == i);
+    }
+}
+
+static void
+pt_test( void )
+{
+    /* need a decent sized stack */
+    int buf1[NPAGES * PAGE_SIZE_4K / 4], *buf2 = NULL;
+
+    /* check the stack is above phys mem */
+    assert((void *) buf1 > (void *) TEST_ADDRESS);
+
+    /* stack test */
+    do_pt_test(buf1);
+
+    return;
+
+    /* heap test */
+    buf2 = malloc(NPAGES * PAGE_SIZE_4K);
+    assert(buf2);
+    do_pt_test(buf2);
+    free(buf2);
+}
 
 #define BUF_SIZ    6144
 #define MAX_ARGS   32
@@ -361,12 +406,26 @@ int main(void)
     /* set up the c library. printf will not work before this is called */
     sosapi_init_syscall_table();
 
+    printf("hello world\n");
+    pt_test();
+    return 0;
+
+    char *x = 0xA0001000;
+    printf("%p %d\n", x, *x);
+    return 0;
+
+
     char buf[BUF_SIZ];
     char *argv[MAX_ARGS];
     int i, r, done, found, new, argc;
     char *bp, *p;
 
+    printf("hello world\n");
+
     in = open("console", O_RDWR);
+
+    printf("world says hello back\n");
+
     assert(in >= 0);
 
     test_buffers(in);

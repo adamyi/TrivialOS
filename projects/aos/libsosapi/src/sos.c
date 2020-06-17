@@ -18,7 +18,7 @@
 #include <sel4/sel4.h>
 
 #define SYSCALL_ENDPOINT_SLOT          (1)
-#define SHARED_BUFFER_VADDR            (0xA0001000)
+#define SHARED_BUFFER_VADDR            (0xA000001000)
 #define PAGE_SIZE_4K                   (0x1000)
 
 #define SYSCALL_NO_OPEN       (0)

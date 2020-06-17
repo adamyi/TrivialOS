@@ -95,6 +95,7 @@ NORETURN void syscall_loop(seL4_CPtr ep)
             cspace_free_slot(&cspace, reply);
             ut_free(reply_ut);
         } else if (label == seL4_Fault_VMFault) {
+            debug_print_fault(message, "lolololol");
             seL4_Fault_t fault = seL4_getFault(message);
             handle_vm_fault(&cspace, seL4_Fault_VMFault_get_Addr(fault), seL4_Fault_VMFault_get_FSR(fault), &tty_test_process, reply, reply_ut);
         } else if (label == seL4_Fault_NullFault) {

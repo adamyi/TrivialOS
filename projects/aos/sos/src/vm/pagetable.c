@@ -62,6 +62,7 @@ static seL4_Error retype_pt(cspace_t *cspace, seL4_CPtr vspace, seL4_Word vaddr,
 static seL4_Error map_frame_impl(addrspace_t *as, cspace_t *cspace, seL4_CPtr frame_cap, seL4_CPtr vspace, seL4_Word vaddr,
                                  seL4_CapRights_t rights, seL4_ARM_VMAttributes attr,
                                  seL4_CPtr *free_slots, seL4_Word *used) {
+    printf("Mapping %p\n", vaddr);
     /* Attempt the mapping */
     seL4_Error err = seL4_ARM_Page_Map(frame_cap, vspace, vaddr, rights, attr);
     for (size_t i = 0; i < MAPPING_SLOTS && err == seL4_FailedLookup; i++) {
@@ -149,7 +150,7 @@ pte_t *get_pte(addrspace_t *as, vaddr_t vaddr, bool create) {
    printf("MMMMMMMMMMMMMMMMMM %ld\n", get_vaddr_level_idx(vaddr, 0));
    pte_t **pte = (pte_t **) &(pdt->entries[get_vaddr_level_idx(vaddr, 0)]);
    printf("BBBBBBBBBBBBBB\n");
-   if (!create) return *pte;
+   if (!create || *pte != NULL) return *pte;
    *pte = malloc(sizeof(pte_t));
    printf("GGGGGGGG\n");
    return *pte;
