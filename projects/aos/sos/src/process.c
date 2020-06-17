@@ -50,7 +50,7 @@ static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, el
         return 0;
     }
 
-    int err = as_define_stack(tty_test_process.addrspace, PAGE_SIZE_4K * 300);
+    int err = as_define_stack(tty_test_process.addrspace, MAX_STACK_SIZE);
     if (err) {
         ZF_LOGE("could not create stack region");
         return 0;
