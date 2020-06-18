@@ -13,7 +13,7 @@
 
 #include <utils/page.h>
 
-#define NPAGES_STACK 10
+#define NPAGES_STACK 1000
 #define NPAGES_HEAP 20
 #define TEST_ADDRESS 0x8000000000
 
@@ -413,6 +413,9 @@ int main(void)
     char xxx[2040];
     char bbp[10000];
 
+    printf("hello world\n");
+    pt_test();
+
     while(1) {
         int ret = read(iin, bbp, 10000);
         printf("read returned %d\n", ret);
@@ -423,10 +426,9 @@ int main(void)
         }
         bbp[ret] = '\0';
         printf("===%s===\n", bbp);
+        write(iin, bbp, ret);
     }
 
-    printf("hello world\n");
-    pt_test();
 
     char buf[BUF_SIZ];
     char *argv[MAX_ARGS];

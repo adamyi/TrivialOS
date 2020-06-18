@@ -58,18 +58,15 @@ static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, el
 
     printf("bright day\n");
 
-    /* Create a stack frame */
-    seL4_CPtr stack_frame_cptr = alloc_map_frame(tty_test_process.addrspace, cspace, tty_test_process.vspace, stack_top,
-                                       seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
+    pte_t *stack_pte;
+    err = alloc_map_frame(tty_test_process.addrspace, cspace, tty_test_process.vspace, stack_top,
+                                       seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, &stack_pte);
     
-    printf("ssssssss\n");
 
-    if (stack_frame_cptr == seL4_CapNull) {
+    if (err) {
         ZF_LOGE("Unable to map stack for user app");
         return 0;
     }
-
-    printf("sunny day\n");
 
     /* allocate a slot to duplicate the stack frame cap so we can map it into our address space */
     seL4_CPtr local_stack_cptr = cspace_alloc_slot(cspace);
@@ -79,7 +76,7 @@ static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, el
     }
 
     /* copy the stack frame cap into the slot */
-    err = cspace_copy(cspace, local_stack_cptr, cspace, stack_frame_cptr, seL4_AllRights);
+    err = cspace_copy(cspace, local_stack_cptr, cspace, stack_pte->cap, seL4_AllRights);
     if (err != seL4_NoError) {
         cspace_free_slot(cspace, local_stack_cptr);
         ZF_LOGE("Failed to copy cap");
@@ -203,57 +200,11 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
     }
 
     /* Create an IPC frame */
-    tty_test_process.ipc_buffer = alloc_map_frame(tty_test_process.addrspace, cspace, tty_test_process.vspace, PROCESS_IPC_BUFFER,
-                                        seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
-    if (tty_test_process.ipc_buffer == seL4_CapNull) {
+    err = alloc_map_frame(tty_test_process.addrspace, cspace, tty_test_process.vspace, PROCESS_IPC_BUFFER,
+                                        seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, &(tty_test_process.ipc_buffer));
+    if (err) {
         ZF_LOGE("Failed to alloc map IPC frame");
         return 0;
-    }
-
-    /* Create a shared buffer */
-    err = as_define_region(tty_test_process.addrspace, PROCESS_IPC_BUFFER + PAGE_SIZE_4K, PAGE_SIZE_4K, seL4_AllRights,
-                seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, NULL);
-    if (err) {
-        ZF_LOGE("Failed to define shared buffer region");
-        return 0;
-    }
-
-    /* Create an sb frame */
-    tty_test_process.shared_buffer = alloc_map_frame(tty_test_process.addrspace, cspace, tty_test_process.vspace, PROCESS_IPC_BUFFER + PAGE_SIZE_4K,
-                                        seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
-    if (tty_test_process.shared_buffer == seL4_CapNull) {
-        ZF_LOGE("Failed to alloc map sb frame");
-        return 0;
-    }
-
-    /* allocate a slot to duplicate the shared buffer frame cap so we can map it into our address space */
-    seL4_CPtr local_shared_cptr = cspace_alloc_slot(cspace);
-    if (local_shared_cptr == seL4_CapNull) {
-        ZF_LOGE("Failed to alloc slot for stack");
-        return false;
-    }
-
-    /* copy the shared frame cap into the slot */
-    err = cspace_copy(cspace, local_shared_cptr, cspace, tty_test_process.shared_buffer, seL4_AllRights);
-    if (err != seL4_NoError) {
-        cspace_free_slot(cspace, local_shared_cptr);
-        ZF_LOGE("Failed to copy cap");
-        return false;
-    }
-
-    /* map it into the sos address space */
-    tty_test_process.shared_buffer_vaddr = get_new_shared_buffer_vaddr();
-    printf("map shit\n");
-    err = map_frame(cspace, local_shared_cptr, seL4_CapInitThreadVSpace, tty_test_process.shared_buffer_vaddr, seL4_AllRights,
-                    seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
-    printf("map shit\n");
-
-    if (err != seL4_NoError) {
-        cspace_delete(cspace, local_shared_cptr);
-        cspace_free_slot(cspace, local_shared_cptr);
-        printf("%ld\n", err);
-        ZF_LOGE("Failed to map");
-        return false;
     }
 
     /* allocate a new slot in the target cspace which we will mint a badged endpoint cap into --
@@ -283,7 +234,7 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
     err = seL4_TCB_Configure(tty_test_process.tcb,
                              tty_test_process.cspace.root_cnode, seL4_NilData,
                              tty_test_process.vspace, seL4_NilData, PROCESS_IPC_BUFFER,
-                             tty_test_process.ipc_buffer);
+                             tty_test_process.ipc_buffer->cap);
     if (err != seL4_NoError) {
         ZF_LOGE("Unable to configure new TCB");
         return false;
@@ -340,11 +291,13 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
     vaddr_t heap_start;
 
     /* load the elf image from the cpio file */
-    err = elf_load(cspace, tty_test_process.vspace, &elf_file, &heap_start);
+    err = elf_load(cspace, tty_test_process.vspace, &elf_file, tty_test_process.addrspace, &heap_start);
     if (err) {
         ZF_LOGE("Failed to load elf image");
         return false;
     }
+
+    printf("elf_load fin\n");
 
     /* set up the heap */
     err = as_define_heap(tty_test_process.addrspace, heap_start);
@@ -353,22 +306,17 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
         return 0;
     }
 
+    printf("heap\n");
+
     /* Map in the IPC buffer for the thread */
-    err = sos_map_frame(tty_test_process.addrspace, cspace, tty_test_process.ipc_buffer, tty_test_process.vspace, PROCESS_IPC_BUFFER,
-                    seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
+    err = sos_map_frame(tty_test_process.addrspace, cspace, tty_test_process.ipc_buffer->frame, tty_test_process.vspace, PROCESS_IPC_BUFFER,
+                    seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, NULL);
     if (err != 0) {
         ZF_LOGE("Unable to map IPC buffer for user app");
         return false;
     }
 
-    /* Map in the shared buffer for the thread */
-    err = sos_map_frame(tty_test_process.addrspace, cspace, tty_test_process.shared_buffer, tty_test_process.vspace, PROCESS_IPC_BUFFER + PAGE_SIZE_4K,
-                    seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
-    if (err != 0) {
-        printf("%d\n", err);
-        ZF_LOGE("Unable to map shared buffer for user app");
-        return false;
-    }
+    printf("ipcbuf\n");
 
     fdtable_init(&tty_test_process.fdt);
 

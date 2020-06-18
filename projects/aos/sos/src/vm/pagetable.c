@@ -53,9 +53,8 @@ static seL4_Error retype_pt(cspace_t *cspace, seL4_CPtr vspace, seL4_Word vaddr,
     return pt_level2mapper[level](empty, vspace, vaddr, seL4_ARM_Default_VMAttributes);
 }
 
-static seL4_Error map_frame_impl(addrspace_t *as, cspace_t *cspace, seL4_CPtr frame_cap, seL4_CPtr vspace, seL4_Word vaddr,
-                                 seL4_CapRights_t rights, seL4_ARM_VMAttributes attr,
-                                 seL4_CPtr *free_slots, seL4_Word *used) {
+static seL4_Error map_frame_impl(addrspace_t *as, cspace_t *cspace, seL4_CPtr frame_cap, frame_ref_t frame_ref, seL4_CPtr vspace, seL4_Word vaddr,
+                                 seL4_CapRights_t rights, seL4_ARM_VMAttributes attr, pte_t **ret) {
     ZF_LOGI("Mapping %p\n", vaddr);
     /* Attempt the mapping */
     seL4_Error err = seL4_ARM_Page_Map(frame_cap, vspace, vaddr, rights, attr);
@@ -71,13 +70,7 @@ static seL4_Error map_frame_impl(addrspace_t *as, cspace_t *cspace, seL4_CPtr fr
         }
 
         /* figure out which cptr to use to retype into*/
-        seL4_CPtr slot;
-        if (used != NULL) {
-            slot = free_slots[i];
-            *used |= BIT(i);
-        } else {
-            slot = cspace_alloc_slot(cspace);
-        }
+        seL4_CPtr slot = cspace_alloc_slot(cspace);
 
         if (slot == seL4_CapNull) {
             ZF_LOGE("No cptr to alloc paging structure");
@@ -120,20 +113,45 @@ static seL4_Error map_frame_impl(addrspace_t *as, cspace_t *cspace, seL4_CPtr fr
     if (!err) {
         /* Create PTE */
         pte_t *pte = get_pte(as, vaddr, true);
-        if (pte == NULL)
+        if (pte == NULL) {
             err = seL4_NotEnoughMemory;
-        else
+        } else {
             pte->cap = frame_cap;
+            pte->frame = frame_ref;
+        }
+        if (ret != NULL) *ret = pte;
     }
 
     return err;
 }
 
 
-seL4_Error sos_map_frame(addrspace_t *as, cspace_t *cspace, seL4_CPtr frame_cap, seL4_CPtr vspace, seL4_Word vaddr,
-                     seL4_CapRights_t rights, seL4_ARM_VMAttributes attr)
-{
-    return map_frame_impl(as, cspace, frame_cap, vspace, vaddr, rights, attr, NULL, NULL);
+seL4_Error sos_map_frame(addrspace_t *as, cspace_t *cspace, frame_ref_t frame_ref, seL4_CPtr vspace, seL4_Word vaddr,
+                     seL4_CapRights_t rights, seL4_ARM_VMAttributes attr, pte_t **ret) {
+    /* allocate a slot to duplicate the frame cap so we can map it into the application */
+    seL4_CPtr frame_cptr = cspace_alloc_slot(cspace);
+    if (frame_cptr == seL4_CapNull) {
+        ZF_LOGE("Failed to alloc slot for stack extra frame");
+        return seL4_NotEnoughMemory;
+    }
+
+    /* copy the stack frame cap into the slot */
+    int err = cspace_copy(cspace, frame_cptr, cspace, frame_page(frame_ref), rights);
+    if (err != seL4_NoError) {
+        cspace_free_slot(cspace, frame_cptr);
+        ZF_LOGE("Failed to copy cap");
+        return err;
+    }
+
+    err = map_frame_impl(as, cspace, frame_cptr, frame_ref, vspace, vaddr, rights, attr, ret);
+    if (err != 0) {
+        cspace_delete(cspace, frame_cptr);
+        cspace_free_slot(cspace, frame_cptr);
+        ZF_LOGE("Unable to map extra stack frame for user app");
+        return err;
+    }
+
+    return seL4_NoError;
 }
 
 pte_t *get_pte(addrspace_t *as, vaddr_t vaddr, bool create) {
@@ -146,42 +164,18 @@ pte_t *get_pte(addrspace_t *as, vaddr_t vaddr, bool create) {
    return *pte;
 }
 
-seL4_CPtr alloc_map_frame(addrspace_t *as, cspace_t *cspace, seL4_CPtr vspace, seL4_Word vaddr,
-                    seL4_CapRights_t rights, seL4_ARM_VMAttributes attrs) {
-    
+seL4_Error alloc_map_frame(addrspace_t *as, cspace_t *cspace, seL4_CPtr vspace, seL4_Word vaddr,
+                    seL4_CapRights_t rights, seL4_ARM_VMAttributes attrs, pte_t **pte) {
     frame_ref_t frame = alloc_frame();
     if (frame == NULL_FRAME) {
         ZF_LOGE("Couldn't allocate additional stack frame");
-        return seL4_CapNull;
+        return seL4_NotEnoughMemory;
     }
-
-    /* allocate a slot to duplicate the frame cap so we can map it into the application */
-    seL4_CPtr frame_cptr = cspace_alloc_slot(cspace);
-    if (frame_cptr == seL4_CapNull) {
-        free_frame(frame);
-        ZF_LOGE("Failed to alloc slot for stack extra frame");
-        return seL4_CapNull;
-    }
-
-    /* copy the stack frame cap into the slot */
-    int err = cspace_copy(cspace, frame_cptr, cspace, frame_page(frame), rights);
+    seL4_Error err = sos_map_frame(as, cspace, frame, vspace, vaddr, rights, attrs, pte);
     if (err != seL4_NoError) {
-        cspace_free_slot(cspace, frame_cptr);
         free_frame(frame);
-        ZF_LOGE("Failed to copy cap");
-        return seL4_CapNull;
     }
-
-    err = sos_map_frame(as, cspace, frame_cptr, vspace, vaddr, rights, attrs);
-    if (err != 0) {
-        cspace_delete(cspace, frame_cptr);
-        cspace_free_slot(cspace, frame_cptr);
-        free_frame(frame);
-        ZF_LOGE("Unable to map extra stack frame for user app");
-        return seL4_CapNull;
-    }
-
-    return frame_cptr;
+    return err;
 }
 
 void unalloc_frame(addrspace_t *as, cspace_t *cspace, vaddr_t vaddr) {
@@ -199,10 +193,11 @@ void unalloc_frame(addrspace_t *as, cspace_t *cspace, vaddr_t vaddr) {
         cspace_free_slot(cspace, pte->cap);
 
         pte->cap = seL4_CapNull;
+        pte->frame = NULL;
     }
 }
 
-void *map_vaddr_to_sos(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, seL4_CPtr *local_cptr, size_t *size) {
+void *map_vaddr_to_sos_deprecated(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, seL4_CPtr *local_cptr, size_t *size) {
     vaddr_t vbase = PAGE_ALIGN_4K(vaddr);
     size_t offset = vaddr - vbase;
     pte_t *pte = get_pte(as, vbase, true);
@@ -273,10 +268,55 @@ void *map_vaddr_to_sos(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, seL4_CP
     return addr + offset;
 }
 
+void *map_vaddr_to_sos(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, seL4_CPtr *local_cptr, size_t *size) {
+    vaddr_t vbase = PAGE_ALIGN_4K(vaddr);
+    size_t offset = vaddr - vbase;
+    pte_t *pte = get_pte(as, vbase, true);
+    if (pte == NULL) {
+        ZF_LOGE("pte is null");
+        return NULL;
+    }
+    if (pte->cap == seL4_CapNull) {
+        frame_ref_t frame = alloc_frame();
+        if (frame == NULL_FRAME) {
+            ZF_LOGE("Couldn't allocate additional stack frame");
+            return NULL;
+        }
+
+        /* allocate a slot to duplicate the frame cap so we can map it into the application */
+        seL4_CPtr frame_cptr = cspace_alloc_slot(cspace);
+        if (frame_cptr == seL4_CapNull) {
+            free_frame(frame);
+            ZF_LOGE("Failed to alloc slot for stack extra frame");
+            return NULL;
+        }
+
+        /* copy the stack frame cap into the slot */
+        int err = cspace_copy(cspace, frame_cptr, cspace, frame_page(frame), seL4_AllRights);
+        if (err != seL4_NoError) {
+            cspace_free_slot(cspace, frame_cptr);
+            free_frame(frame);
+            ZF_LOGE("Failed to copy cap");
+            return NULL;
+        }
+
+        pte->cap = frame_cptr;
+        pte->frame = frame;
+    }
+
+    void *addr = frame_data(pte->frame);
+
+    *local_cptr = frame_page(pte->frame);
+
+    *size = PAGE_SIZE_4K - offset;
+    ZF_LOGE("mapped %p to %p (page %p, %d till end)", vaddr, addr + offset, addr, *size);
+    return addr + offset;
+}
+
 void unmap_vaddr_from_sos(cspace_t *cspace, seL4_CPtr local_cptr) {
-    seL4_ARM_Page_Unmap(local_cptr);
+    /*seL4_ARM_Page_Unmap(local_cptr);
     cspace_delete(cspace, local_cptr);
-    cspace_free_slot(cspace, local_cptr);
+    cspace_free_slot(cspace, local_cptr);*/
 }
 
 int copy_in(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, size_t size, void *dest) {

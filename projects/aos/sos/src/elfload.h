@@ -18,4 +18,4 @@
 
 #include "vm/addrspace.h"
 
-int elf_load(cspace_t *cspace, seL4_CPtr loadee_vspace, elf_t *elf_file, vaddr_t *end);
+int elf_load(cspace_t *cspace, seL4_CPtr loadee_vspace, elf_t *elf_file, addrspace_t *as, vaddr_t *end);
