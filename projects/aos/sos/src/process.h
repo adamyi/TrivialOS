@@ -23,15 +23,13 @@ typedef struct process {
     ut_t *vspace_ut;
     seL4_CPtr vspace;
 
-    pte_t *ipc_buffer;
+    pte_t ipc_buffer;
 
     ut_t *sched_context_ut;
     seL4_CPtr sched_context;
 
     cspace_t cspace;
     addrspace_t *addrspace;
-
-    frame_ref_t stack_frame;
 
     vnode_t *cwd;
     fdtable_t fdt;

@@ -27,14 +27,19 @@ addrspace_t *as_create() {
     addrspace_t *ret = malloc(sizeof(addrspace_t));
     if (ret == NULL) return NULL;
     bzero(ret, sizeof(addrspace_t));
-    if ((ret->pagetable = create_pt()) == NULL) {
+
+    ret->pagetable = alloc_frame();
+    if (ret->pagetable == NULL_FRAME) {
         free(ret);
         return NULL;
     }
+    memset(frame_data(ret->pagetable), 0, PAGE_SIZE_4K);
+
     return ret;
 }
 
-void as_destroy(addrspace_t *as) {
+void as_destroy(addrspace_t *as, cspace_t *cspace) {
+    pagetable_destroy(as, cspace);
     free(as);
 }
 

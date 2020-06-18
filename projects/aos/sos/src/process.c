@@ -58,7 +58,7 @@ static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, el
 
     printf("bright day\n");
 
-    pte_t *stack_pte;
+    pte_t stack_pte;
     err = alloc_map_frame(tty_test_process.addrspace, cspace, tty_test_process.vspace, stack_top,
                                        seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, &stack_pte);
     
@@ -76,7 +76,7 @@ static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, el
     }
 
     /* copy the stack frame cap into the slot */
-    err = cspace_copy(cspace, local_stack_cptr, cspace, stack_pte->cap, seL4_AllRights);
+    err = cspace_copy(cspace, local_stack_cptr, cspace, stack_pte.cap, seL4_AllRights);
     if (err != seL4_NoError) {
         cspace_free_slot(cspace, local_stack_cptr);
         ZF_LOGE("Failed to copy cap");
@@ -234,7 +234,7 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
     err = seL4_TCB_Configure(tty_test_process.tcb,
                              tty_test_process.cspace.root_cnode, seL4_NilData,
                              tty_test_process.vspace, seL4_NilData, PROCESS_IPC_BUFFER,
-                             tty_test_process.ipc_buffer->cap);
+                             tty_test_process.ipc_buffer.cap);
     if (err != seL4_NoError) {
         ZF_LOGE("Unable to configure new TCB");
         return false;
@@ -309,7 +309,7 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
     printf("heap\n");
 
     /* Map in the IPC buffer for the thread */
-    err = sos_map_frame(tty_test_process.addrspace, cspace, tty_test_process.ipc_buffer->frame, tty_test_process.vspace, PROCESS_IPC_BUFFER,
+    err = sos_map_frame(tty_test_process.addrspace, cspace, tty_test_process.ipc_buffer.frame, tty_test_process.vspace, PROCESS_IPC_BUFFER,
                     seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, NULL);
     if (err != 0) {
         ZF_LOGE("Unable to map IPC buffer for user app");

@@ -84,7 +84,7 @@ static int load_segment_into_vspace(addrspace_t *as, cspace_t *cspace, seL4_CPtr
     while (pos < segment_size) {
         uintptr_t loadee_vaddr = (ROUND_DOWN(dst, PAGE_SIZE_4K));
 
-        pte_t *loadee_pte;
+        pte_t loadee_pte;
 
         err = alloc_map_frame(as, cspace, loadee, loadee_vaddr, permissions, attr, &loadee_pte);
 
@@ -106,7 +106,7 @@ static int load_segment_into_vspace(addrspace_t *as, cspace_t *cspace, seL4_CPtr
             return -1;
         }
 
-        seL4_CPtr loadee_frame = loadee_pte->cap;
+        seL4_CPtr loadee_frame = loadee_pte.cap;
 
         /* finally copy the data */
         seL4_CPtr lcptr;
