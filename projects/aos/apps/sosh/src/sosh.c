@@ -169,16 +169,18 @@ static int cp(int argc, char **argv)
     file2 = argv[2];
 
     fd = open(file1, O_RDONLY);
-    fd_out = open(file2, O_WRONLY);
+    fd_out = open(file2, O_WRONLY | O_CREAT);
 
     assert(fd >= 0);
+    assert(fd_out >= 0);
 
     while ((num_read = read(fd, buf, BUF_SIZ)) > 0) {
         num_written = write(fd_out, buf, num_read);
+        if (num_written == -1) break;
     }
 
     if (num_read == -1 || num_written == -1) {
-        printf("error on cp\n");
+        printf("error on cp %d %d\n", num_read, num_written);
         return 1;
     }
 
@@ -271,12 +273,14 @@ static int dir(int argc, char **argv)
 
     while (1) {
         r = sos_getdirent(i, buf, BUF_SIZ);
+        printf("getdirent(%d) returned %d\n", i, r);
         if (r < 0) {
             printf("dirent(%d) failed: %d\n", i, r);
             break;
         } else if (!r) {
             break;
         }
+        printf("lmao %s\n", buf);
         r = sos_stat(buf, &sbuf);
         if (r < 0) {
             printf("stat(%s) failed: %d\n", buf, r);
@@ -414,9 +418,9 @@ int main(void)
     char bbp[10000];
 
     printf("hello world\n");
-    pt_test();
+    // pt_test();
 
-    while(1) {
+    while(0) {
         int ret = read(iin, bbp, 10000);
         printf("read returned %d\n", ret);
         if (ret == -1) {
@@ -437,13 +441,13 @@ int main(void)
 
     printf("hello world\n");
 
-    in = open(console, O_RDWR);
+    in = iin; //open(console, O_RDWR);
 
     printf("world says hello back %d\n", in);
 
     assert(in >= 0);
 
-    test_buffers(in);
+    // test_buffers(in);
 
     bp = buf;
     done = 0;

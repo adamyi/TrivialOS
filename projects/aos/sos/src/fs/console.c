@@ -12,17 +12,18 @@
 #define CONSOLE_BUFFER_SIZE (PAGE_SIZE_4K)
 
 vnode_ops_t console_ops = {
-                .vop_open    = NULL, 
-                .vop_read    = console_read,
-                .vop_write   = console_write,
-                .vop_reclaim = console_reclaim
+                .vop_open  = NULL, 
+                .vop_read  = console_read,
+                .vop_write = console_write,
+                .vop_close = console_close
 };
 
 vnode_ops_t root_console_ops = {
-                .vop_open    = console_open, 
-                .vop_read    = NULL,
-                .vop_write   = NULL,
-                .vop_reclaim = NULL };
+                .vop_open  = console_open, 
+                .vop_read  = NULL,
+                .vop_write = NULL,
+                .vop_close = NULL
+};
 
 static struct serial *handle;
 static rollingarray_t *kbuff;
@@ -151,7 +152,7 @@ int console_write(vnode_t *file, struct uio *uio, coro_t me) {
     return serial_send(handle, uio->iovec.base, uio->iovec.len);
 }
 
-int console_reclaim(vnode_t *vnode, coro_t me) {
+int console_close(vnode_t *vnode, coro_t me) {
     (void) me;
     if (mode_is_read((seL4_Word) vnode->data)) {
         has_reader = false;

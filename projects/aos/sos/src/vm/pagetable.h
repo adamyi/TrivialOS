@@ -54,4 +54,5 @@ void unalloc_frame(addrspace_t *as, cspace_t *cspace, vaddr_t vaddr);
 void *map_vaddr_to_sos(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, seL4_CPtr *local_cptr, size_t *size);
 void unmap_vaddr_from_sos(cspace_t *cspace, seL4_CPtr local_cptr);
 int copy_in(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, size_t size, void *dest);
+int copy_out(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, size_t size, void *src);
 void pagetable_destroy(addrspace_t *as, cspace_t *cspace);

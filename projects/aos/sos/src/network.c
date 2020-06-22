@@ -47,6 +47,7 @@
 #include "mapping.h"
 #include "irq.h"
 #include "ut.h"
+#include "fs/nfs.h"
 
 
 #ifndef SOS_NFS_DIR
@@ -295,4 +296,5 @@ void nfs_mount_cb(int status, UNUSED struct nfs_context *nfs, void *data,
     }
 
     printf("Mounted nfs dir %s\n", nfs_dir_buf);
+    sos_nfs_init(nfs);
 }

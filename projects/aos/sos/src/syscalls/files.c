@@ -22,7 +22,7 @@ IMPLEMENT_SYSCALL(open, 3) {
     int err = copy_in(cspace, proc->addrspace, pathname_ptr, pathlen, pathname);
     //int err = copy_in(cspace, proc->vspace, proc->addrspace, pathname_ptr, pathlen, pathname);
     if (err) return return_word(-EINVAL);
-    pathname[pathlen + 1] = '\0';
+    pathname[pathlen] = '\0';
 
     printf("%s\n", pathname);
 
@@ -69,7 +69,9 @@ static inline seL4_MessageInfo_t read_write(SYSCALL_PARAMS, int is_write) {
     err = fdtable_get(&proc->fdt, fd, &fdesc_node, me);
     if (err) return return_word(err);
 
-    if ((fdesc_node->flag & O_ACCMODE) == O_WRONLY)
+    if ((!is_write) && (fdesc_node->flag & O_ACCMODE) == O_WRONLY)
+        return return_word(-EBADF);
+    if (is_write && (fdesc_node->flag & O_ACCMODE) == O_RDONLY)
         return return_word(-EBADF);
 
     printf("va %p\n", vaddr);
@@ -114,4 +116,40 @@ IMPLEMENT_SYSCALL(read, 3) {
 
 IMPLEMENT_SYSCALL(write, 3) {
     return read_write(cspace, proc, me, 1);
+}
+
+IMPLEMENT_SYSCALL(getdirent, 3) {
+    int pos = seL4_GetMR(1);
+    char pathname[PATH_MAX + 1];
+    vaddr_t name_ptr = seL4_GetMR(2);
+    size_t nbyte = seL4_GetMR(3);
+    if (nbyte > PATH_MAX) nbyte = PATH_MAX;
+    int ret = vfs_getdirent(pos, pathname, nbyte, me);
+    if (ret >= 0) {
+        if (copy_out(cspace, proc->addrspace, name_ptr, ret, pathname) != 0)
+            ret = -1;
+    }
+    printf("WE SHOULD RETURN %d\n", ret);
+    return return_word(ret);
+}
+
+IMPLEMENT_SYSCALL(stat, 3) {
+    char pathname[PATH_MAX + 1];
+
+    vaddr_t pathname_ptr = seL4_GetMR(1);
+    int pathlen = seL4_GetMR(2);
+    vaddr_t stat_ptr = seL4_GetMR(3);
+    if (pathlen > PATH_MAX) {
+        return return_word(-ENAMETOOLONG);
+    }
+    int err = copy_in(cspace, proc->addrspace, pathname_ptr, pathlen, pathname);
+    if (err) return return_word(-EINVAL);
+    pathname[pathlen] = '\0';
+    sos_stat_t stat;
+    int ret = vfs_stat(pathname, &stat, me);
+    if (ret == 0) {
+        if(copy_out(cspace, proc->addrspace, (vaddr_t) stat_ptr, sizeof(sos_stat_t), &stat) != 0)
+            ret = -EINVAL;
+    }
+    return return_word(ret);
 }

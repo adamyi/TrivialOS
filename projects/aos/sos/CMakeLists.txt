@@ -70,6 +70,7 @@ add_executable(
     src/vfs/uio.c
     src/vfs/file.c
     src/fs/console.c
+    src/fs/nfs.c
     src/coroutine/picoro.c
 )
 target_include_directories(sos PRIVATE "include")

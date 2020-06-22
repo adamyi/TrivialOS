@@ -329,3 +329,20 @@ int copy_in(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, size_t size, void 
     return 0;
 }
 
+int copy_out(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, size_t size, void *src) {
+    size_t rs;
+    seL4_CPtr lc;
+    void *dest;
+    while (size > 0) {
+        // we don't need to check overflow because regions are aligned
+        // if we overflow, we won't get pte
+        dest = map_vaddr_to_sos(cspace, as, vaddr, &lc, &rs);
+        if (dest == NULL) return -1;
+        if (size < rs) rs = size;
+        memcpy(dest, src, rs);
+        size -= rs;
+        src += rs;
+        unmap_vaddr_from_sos(cspace, lc);
+    }
+    return 0;
+}

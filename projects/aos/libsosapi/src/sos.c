@@ -28,6 +28,8 @@
 #define SYSCALL_NO_USLEEP     (4)
 #define SYSCALL_NO_TIME_STAMP (5)
 #define SYSCALL_NO_BRK        (6)
+#define SYSCALL_NO_GETDIRENT  (7)
+#define SYSCALL_NO_STAT       (8)
 
 #define SYSCALL_NO_UNIMPL     (100)
 
@@ -79,17 +81,22 @@ int sos_sys_write(int file, const char *buf, size_t nbyte)
 
 int sos_getdirent(int pos, char *name, size_t nbyte)
 {
-    (void) pos;
-    (void) name;
-    (void) nbyte;
-    return unimplemented_syscall();
+    seL4_SetMR(0, SYSCALL_NO_GETDIRENT);
+    seL4_SetMR(1, pos);
+    seL4_SetMR(2, name);
+    seL4_SetMR(3, nbyte);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 4));
+    return seL4_GetMR(0);
 }
 
 int sos_stat(const char *path, sos_stat_t *buf)
 {
-    (void) path;
-    (void) buf;
-    return unimplemented_syscall();
+    seL4_SetMR(0, SYSCALL_NO_STAT);
+    seL4_SetMR(1, path);
+    seL4_SetMR(2, strlen(path));
+    seL4_SetMR(3, buf);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 4));
+    return seL4_GetMR(0);
 }
 
 pid_t sos_process_create(const char *path)

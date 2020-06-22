@@ -20,6 +20,10 @@ void register_device(char *device, vnode_t *vn) {
     list_append(device_list, n);
 }
 
+void register_rootfs(vnode_t *vn) {
+    rootfs = vn;
+}
+
 vnode_t *lookup_device(char *device) {
     if (device_list == NULL) return NULL;
     struct list_node *curr = device_list->head;
@@ -76,5 +80,14 @@ int vfs_open(char *pathname, int flags, vnode_t **res, coro_t me) {
 }
 
 int vfs_close(vnode_t *vn, coro_t me) {
-    return VOP_RECLAIM(vn, me);
+    return VOP_CLOSE(vn, me);
+}
+
+int vfs_getdirent(int pos, char *name, size_t nbyte, coro_t me) {
+    return VOP_GET_DIRENT(rootfs, pos, name, nbyte, me);
+}
+
+int vfs_stat(char *name, sos_stat_t *stat, coro_t me) {
+    vnode_t *vn = vfs_lookup(name);
+    return VOP_STAT(vn, name, stat, me);
 }

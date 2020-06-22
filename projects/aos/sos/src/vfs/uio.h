@@ -15,7 +15,7 @@ enum uio_rw {
     UIO_WRITE,
 };
 
-typedef struct iovec {
+typedef struct io_vec {
     void *base;
     size_t len;
 } iovec_t;
