@@ -56,8 +56,6 @@ static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, el
         return 0;
     }
 
-    printf("bright day\n");
-
     pte_t stack_pte;
     err = alloc_map_frame(tty_test_process.addrspace, cspace, tty_test_process.vspace, stack_top,
                                        seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, &stack_pte);
@@ -189,7 +187,6 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
         ZF_LOGE("Failed to create addrspace");
         return 0;
     }
-    printf(":)\n");
 
     /* Create an IPC buffer */
     err = as_define_region(tty_test_process.addrspace, PROCESS_IPC_BUFFER, PAGE_SIZE_4K, seL4_AllRights,
@@ -297,16 +294,12 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
         return false;
     }
 
-    printf("elf_load fin\n");
-
     /* set up the heap */
     err = as_define_heap(tty_test_process.addrspace, heap_start);
     if (err) {
         ZF_LOGE("Failed to define heap region");
         return 0;
     }
-
-    printf("heap\n");
 
     /* Map in the IPC buffer for the thread */
     err = sos_map_frame(tty_test_process.addrspace, cspace, tty_test_process.ipc_buffer.frame, tty_test_process.vspace, PROCESS_IPC_BUFFER,
@@ -315,8 +308,6 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
         ZF_LOGE("Unable to map IPC buffer for user app");
         return false;
     }
-
-    printf("ipcbuf\n");
 
     fdtable_init(&tty_test_process.fdt);
 

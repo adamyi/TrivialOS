@@ -21,7 +21,7 @@ static void clean_up(cspace_t *cspace, seL4_CPtr reply, ut_t *reply_ut) {
 }
 
 void handle_vm_fault(cspace_t *cspace, void *vaddr, seL4_Word type, process_t *curr, seL4_CPtr reply, ut_t *reply_ut) {
-    printf("tttttttttttt VM Fault Type %lx\n", type);
+    // printf("tttttttttttt VM Fault Type %lx\n", type);
     vaddr = PAGE_ALIGN_4K((vaddr_t) vaddr);
     /* Check permisison fault on page */
     if (is_perm_fault(type)) {

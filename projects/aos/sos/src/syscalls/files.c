@@ -24,11 +24,14 @@ IMPLEMENT_SYSCALL(open, 3) {
     if (err) return return_word(-EINVAL);
     pathname[pathlen] = '\0';
 
-    printf("%s\n", pathname);
+    // printf("%s\n", pathname);
 
     if ((flags & (O_RDONLY | O_WRONLY | O_RDWR | O_CREAT | O_EXCL | O_TRUNC | O_APPEND)) != flags) {
         return return_word(-EINVAL);
     }
+
+    // always create non-existent files (stupid requirement)
+    flags |= O_CREAT;
 
     int accmode = flags & O_ACCMODE;
     if (accmode != O_RDONLY && accmode != O_WRONLY && accmode != O_RDWR) {
@@ -50,7 +53,7 @@ IMPLEMENT_SYSCALL(open, 3) {
 }
 
 IMPLEMENT_SYSCALL(close, 1) {
-    int fd = seL4_GetMR(0);
+    int fd = seL4_GetMR(1);
     struct fdesc* fdesc_node = NULL;
     int err = fdtable_get(&proc->fdt, fd, &fdesc_node, me);
     if (err) return return_word(err);
@@ -74,8 +77,8 @@ static inline seL4_MessageInfo_t read_write(SYSCALL_PARAMS, int is_write) {
     if (is_write && (fdesc_node->flag & O_ACCMODE) == O_RDONLY)
         return return_word(-EBADF);
 
-    printf("va %p\n", vaddr);
-    printf("s %d\n", size);
+    // printf("va %p\n", vaddr);
+    // printf("s %d\n", size);
 
     size_t remaining = size;
 
@@ -93,20 +96,20 @@ static inline seL4_MessageInfo_t read_write(SYSCALL_PARAMS, int is_write) {
             if (uio_uinit(&myuio, vaddr, rem, 0, UIO_WRITE, cspace, proc->addrspace)) return return_word(-1);
             if (myuio.iovec.len < rem) rem = myuio.iovec.len;
             nb = VOP_READ(fdesc_node->vnode, &myuio, me);
-            printf("%d %d\n", nb, rem);
+            // printf("%d %d\n", nb, rem);
             if (nb != rem) cont = false;
         }
         
         uio_destroy(&myuio, cspace);
         if (nb < 0) return return_word(nb);
         remaining -= nb;
-        printf("read %d bytes from %p, remaining %d\n", nb, vaddr, remaining);
+        // printf("read %d bytes from %p, remaining %d\n", nb, vaddr, remaining);
         // uio_destroy doesn't change those
         vaddr += nb;
     }
 
 
-    printf("rs %d\n", size - remaining);
+    // printf("rs %d\n", size - remaining);
     return return_word(size - remaining);
 }
 
@@ -129,7 +132,7 @@ IMPLEMENT_SYSCALL(getdirent, 3) {
         if (copy_out(cspace, proc->addrspace, name_ptr, ret, pathname) != 0)
             ret = -1;
     }
-    printf("WE SHOULD RETURN %d\n", ret);
+    // printf("WE SHOULD RETURN %d\n", ret);
     return return_word(ret);
 }
 

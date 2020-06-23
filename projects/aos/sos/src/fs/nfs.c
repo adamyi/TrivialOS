@@ -37,7 +37,6 @@ typedef struct res_cb {
 int sos_nfs_init(struct nfs_context *nfs) {
 
     sos_nfs = nfs;
-    printf("NFS is %p\n", sos_nfs);
     vnode_t *root = malloc(sizeof(vnode_t));
     if (root == NULL) {
         ZF_LOGE("Error making root vnode");
@@ -50,7 +49,6 @@ int sos_nfs_init(struct nfs_context *nfs) {
 }
 
 static void sos_nfs_cb(int status, UNUSED struct nfs_context *nfs, void *data, void *private_data) {
-    printf("private data %p\n", private_data);
     res_cb_t *ret = (res_cb_t *) private_data;
     ret->status = status;
     ret->data = data;
@@ -149,7 +147,6 @@ int sos_nfs_stat(vnode_t *vnode, char *pathname, sos_stat_t *stat, coro_t me) {
 
 int sos_nfs_get_dirent(vnode_t *vnode, int pos, char *name, size_t nbyte, coro_t me) {
     (void) vnode;
-    printf("SSSSSSSS\n");
     res_cb_t cb_ret = {
         .coro = me,
         .status = 0,
@@ -159,29 +156,18 @@ int sos_nfs_get_dirent(vnode_t *vnode, int pos, char *name, size_t nbyte, coro_t
     // TODO: ask which directory to open
     if (nfs_opendir_async(sos_nfs, "/", sos_nfs_cb, &cb_ret) < 0) return -1;
     yield(NULL);
-    printf("EEEEEEEEEEEE\n");
     if (cb_ret.status < 0) {
         ZF_LOGE("Error opening dir NFS: %s", cb_ret.data);
         return -1; 
     }
     struct nfsdir *dir = (struct nfsdir *) cb_ret.data;
-    printf("%p\n", nfs_readdir(sos_nfs, dir));
-    for (int i = 0; i < 10; i++) {
-        nfs_seekdir(sos_nfs, dir, i);
-        printf("%d: %p\n",i,  nfs_readdir(sos_nfs, dir));
-    }
-    printf("pos %d\n", pos);
     nfs_seekdir(sos_nfs, dir, pos);
-    printf("kkkkkkkkkk\n");
     struct nfsdirent *dirent = nfs_readdir(sos_nfs, dir);
-    printf("dirent %p\n", dirent);
     nfs_closedir(sos_nfs, dir);
     if (dirent == NULL) return 0;
     size_t len = strlen(dirent->name) + 1;
     if (len > nbyte) len = nbyte;
-    printf("mmmmmmmmmmmm %d\n", len);
     memcpy(name, dirent->name, len);
     name[len] = '\0';
-    printf("ddddddddddd\n");
     return len;
 }

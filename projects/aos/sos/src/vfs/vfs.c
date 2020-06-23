@@ -46,7 +46,7 @@ void vnode_check(vnode_t *vn, const char *opstr) {
     if (vn == NULL) ZF_LOGF("vnode is NULL?!?");
     if (vn->ops == NULL) ZF_LOGF("ops ptr is NULL?!?");
     if (vn->refcount < 0) ZF_LOGF("Refcount is negative? Help!");
-    printf("check ok\n");
+    // printf("check ok\n");
 }
 
 void vnode_cleanup(vnode_t *vn) {
@@ -75,7 +75,6 @@ vnode_t *vfs_lookup(char *pathname) {
 int vfs_open(char *pathname, int flags, vnode_t **res, coro_t me) {
     vnode_t *vn = vfs_lookup(pathname);
     if (vn == NULL) return -1;
-    printf("VFS_OPEN is trivial\n");
     return VOP_OPEN(vn, pathname, flags, res, me);
 }
 

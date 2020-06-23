@@ -32,6 +32,7 @@
     printf("Registered syscall " #syscall_name " with code %d\n", syscall_no_##syscall_name)
 
 static inline seL4_MessageInfo_t return_word(seL4_Word word) {
+    // printf("return_word %d\n", word);
     seL4_SetMR(0, word);
     return seL4_MessageInfo_new(0, 0, 0, 1);
 }

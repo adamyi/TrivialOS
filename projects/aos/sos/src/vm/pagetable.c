@@ -294,14 +294,14 @@ void *map_vaddr_to_sos(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, seL4_CP
         pte->inuse = true;
     }
 
-    printf("%d\n", pte->frame);
+    //printf("%d\n", pte->frame);
     void *addr = frame_data(pte->frame);
-    printf("%p\n", addr);
+    //printf("%p\n", addr);
 
     *local_cptr = frame_page(pte->frame);
 
     *size = PAGE_SIZE_4K - offset;
-    ZF_LOGE("mapped %p to %p (page %p, %d till end)", vaddr, addr + offset, addr, *size);
+    //ZF_LOGE("mapped %p to %p (page %p, %d till end)", vaddr, addr + offset, addr, *size);
     return addr + offset;
 }
 
@@ -317,10 +317,10 @@ int copy_in(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, size_t size, void 
         // we don't need to check overflow because regions are aligned
         // if we overflow, we won't get pte
         src = map_vaddr_to_sos(cspace, as, vaddr, &lc, &rs);
-        printf("sos addr %p\n", src);
+        //printf("sos addr %p\n", src);
         if (src == NULL) return -1;
         if (size < rs) rs = size;
-        printf("copying %d bytes from %p to %p\n", rs, src, dest);
+        //printf("copying %d bytes from %p to %p\n", rs, src, dest);
         memcpy(dest, src, rs);
         size -= rs;
         dest += rs;

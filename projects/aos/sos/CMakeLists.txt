@@ -22,7 +22,7 @@ config_string(SosFrameLimit SOS_FRAME_LIMIT "Frame table frame limit" UNQUOTE DE
 add_config_library(sos "${configure_string}")
 
 # warn about everything
-add_compile_options(-Wall -W -Wextra)
+add_compile_options(-Wall -W -Wextra -O2)
 # enable stack unwind tables -- this allows backtrace() to work.
 add_compile_options(-funwind-tables)
 add_definitions(-DSTDSOCKET)

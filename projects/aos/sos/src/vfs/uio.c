@@ -16,7 +16,7 @@ int uio_uinit(uio_t *uio, vaddr_t data, size_t size, size_t offset, enum uio_rw 
     if (size < uio->iovec.len) uio->iovec.len = size;
     uio->offset = offset;
     uio->segflag = UIO_USERSPACE;
-    printf("uio_uinit %p\n", uio->iovec.base);
+    // printf("uio_uinit %p\n", uio->iovec.base);
     return uio->iovec.base == NULL;
 }
 

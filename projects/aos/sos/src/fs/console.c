@@ -96,9 +96,11 @@ int console_open(vnode_t *object, char *pathname, int flags_from_open, vnode_t *
         ZF_LOGE("Error initializing serial");
         return -1;
     }
-    if (mode_is_read((seL4_Word) flags_from_open) && has_reader) {
-        ZF_LOGE("Already have a reader");
-        return -1;
+    if (mode_is_read((seL4_Word) flags_from_open)) {
+        if (has_reader) {
+            ZF_LOGE("Already have a reader");
+            return -1;
+        }
         has_reader = true;
     }
     vnode_t *vnode = malloc(sizeof(vnode_t));
@@ -131,13 +133,13 @@ int console_read(vnode_t *file, struct uio *uio, coro_t me) {
         queue_dequeue(&newline_queue);
         uio->iovec.len = newline_idx;
     }
-    ZF_LOGE("hh %p %d\n", uio->iovec.base, uio->iovec.len);
+    // ZF_LOGE("hh %p %d\n", uio->iovec.base, uio->iovec.len);
     uio->iovec.len = rollingarray_to_array(kbuff, (char *)uio->iovec.base, false, uio->iovec.len);
-    ZF_LOGE("hh %d\n", uio->iovec.len);
+    // ZF_LOGE("hh %d\n", uio->iovec.len);
     kbuff->start += uio->iovec.len;
     if (kbuff->start >= kbuff->capacity) kbuff->start -= kbuff->capacity;
     kbuff->size -= uio->iovec.len;
-    printf("remaining size %lu\n", kbuff->size);
+    // printf("remaining size %lu\n", kbuff->size);
     // ((char *)uio->iovec.base)[uio->iovec.len] = '\0';
     // printf("read %s\n", (char *)uio->iovec.base);
     return uio->iovec.len;
