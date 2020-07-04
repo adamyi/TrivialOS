@@ -40,7 +40,6 @@ add_executable(
     src/bootstrap.c
     src/dma.c
     src/elf.c
-    src/frame_table.c
     src/irq.c
     src/main.c
     src/mapping.c
@@ -60,6 +59,7 @@ add_executable(
     src/threads.c
     src/process.c
     src/vm/addrspace.c
+    src/vm/frame_table.c
     src/vm/pagetable.c
     src/vm/fault_handler.c
     src/syscalls/syscall.c

@@ -8,7 +8,7 @@
 #include "elfload.h"
 #include "process.h"
 #include "vmem_layout.h"
-#include "frame_table.h"
+#include "vm/frame_table.h"
 #include "mapping.h"
 #include "threads.h"
 #include "ut.h"
@@ -31,7 +31,7 @@ static int stack_write(seL4_Word *mapped_stack, int index, uintptr_t val)
 
 /* set up System V ABI compliant stack, so that the process can
  * start up and initialise the C library */
-static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, elf_t *elf_file)
+static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, elf_t *elf_file, coro_t coro)
 {
 
     /* virtual addresses in the target process' address space */
@@ -57,8 +57,8 @@ static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, el
     }
 
     pte_t stack_pte;
-    err = alloc_map_frame(tty_test_process.addrspace, cspace, tty_test_process.vspace, stack_top,
-                                       seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, &stack_pte);
+    err = alloc_map_frame(tty_test_process.addrspace, cspace, stack_top,
+                                       seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, &stack_pte, coro);
     
 
     if (err) {
@@ -152,14 +152,40 @@ static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, el
     return stack_bottom;
 }
 
+struct sfp_args {
+    cspace_t *cspace;
+    char *app_name;
+    seL4_CPtr ep;
+    coro_t coro;
+};
+
 /* Start the first process, and return true if successful
  *
  * This function will leak memory if the process does not start successfully.
  * TODO: avoid leaking memory once you implement real processes, otherwise a user
  *       can force your OS to run out of memory by creating lots of failed processes.
  */
-bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
-{
+void *_start_first_process_impl(void *args);
+
+bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep) {
+    coro_t c = coroutine(_start_first_process_impl);
+    struct sfp_args args = {
+        .cspace = cspace,
+        .app_name = app_name,
+        .ep = ep,
+        .coro = c
+    };
+    resume(c, &args);
+    return true;
+}
+
+void *_start_first_process_impl(void *args) {
+    struct sfp_args *sargs = args;
+    cspace_t *cspace = sargs->cspace;
+    char *app_name = sargs->app_name;
+    seL4_CPtr ep = sargs->ep;
+    coro_t coro = sargs->coro;
+    printf("aaaaaaaaaaaa\n");
     /* Create a VSpace */
     tty_test_process.vspace_ut = alloc_retype(&tty_test_process.vspace, seL4_ARM_PageGlobalDirectoryObject,
                                               seL4_PGDBits);
@@ -167,6 +193,7 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
         return false;
     }
 
+    printf("aaaaaaaaaaaa\n");
     /* assign the vspace to an asid pool */
     seL4_Word err = seL4_ARM_ASIDPool_Assign(seL4_CapInitThreadASIDPool, tty_test_process.vspace);
     if (err != seL4_NoError) {
@@ -174,6 +201,7 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
         return false;
     }
 
+    printf("aaaaaaaaaaaa\n");
     /* Create a simple 1 level CSpace */
     err = cspace_create_one_level(cspace, &tty_test_process.cspace);
     if (err != CSPACE_NOERROR) {
@@ -181,13 +209,15 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
         return false;
     }
 
+    printf("aaaaaaaaaaaa\n");
     /* Create an as */
-    tty_test_process.addrspace = as_create();
+    tty_test_process.addrspace = as_create(tty_test_process.vspace);
     if (tty_test_process.addrspace == NULL) {
         ZF_LOGE("Failed to create addrspace");
         return 0;
     }
 
+    printf("aaaaaaaaaaaa\n");
     /* Create an IPC buffer */
     err = as_define_region(tty_test_process.addrspace, PROCESS_IPC_BUFFER, PAGE_SIZE_4K, seL4_AllRights,
                 seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, NULL);
@@ -196,14 +226,16 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
         return 0;
     }
 
+    printf("aaaaaaaaaaaa\n");
     /* Create an IPC frame */
-    err = alloc_map_frame(tty_test_process.addrspace, cspace, tty_test_process.vspace, PROCESS_IPC_BUFFER,
-                                        seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, &(tty_test_process.ipc_buffer));
+    err = alloc_map_frame(tty_test_process.addrspace, cspace, PROCESS_IPC_BUFFER,
+                                        seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, &(tty_test_process.ipc_buffer), coro);
     if (err) {
         ZF_LOGE("Failed to alloc map IPC frame");
         return 0;
     }
 
+    printf("aaaaaaaaaaaa\n");
     /* allocate a new slot in the target cspace which we will mint a badged endpoint cap into --
      * the badge is used to identify the process, which will come in handy when you have multiple
      * processes. */
@@ -213,6 +245,7 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
         return false;
     }
 
+    printf("aaaaaaaaaaaa\n");
     /* now mutate the cap, thereby setting the badge */
     err = cspace_mint(&tty_test_process.cspace, user_ep, cspace, ep, seL4_AllRights, TTY_EP_BADGE);
     if (err) {
@@ -220,6 +253,7 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
         return false;
     }
 
+    printf("aaaaaaaaaaaa\n");
     /* Create a new TCB object */
     tty_test_process.tcb_ut = alloc_retype(&tty_test_process.tcb, seL4_TCBObject, seL4_TCBBits);
     if (tty_test_process.tcb_ut == NULL) {
@@ -227,6 +261,7 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
         return false;
     }
 
+    printf("aaaaaaaaaaaa\n");
     /* Configure the TCB */
     err = seL4_TCB_Configure(tty_test_process.tcb,
                              tty_test_process.cspace.root_cnode, seL4_NilData,
@@ -237,6 +272,7 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
         return false;
     }
 
+    printf("aaaaaaaaaaaa\n");
     /* Create scheduling context */
     tty_test_process.sched_context_ut = alloc_retype(&tty_test_process.sched_context, seL4_SchedContextObject,
                                                      seL4_MinSchedContextBits);
@@ -245,6 +281,7 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
         return false;
     }
 
+    printf("aaaaaaaaaaaa\n");
     /* Configure the scheduling context to use the first core with budget equal to period */
     err = seL4_SchedControl_Configure(sched_ctrl_start, tty_test_process.sched_context, US_IN_MS, US_IN_MS, 0, 0);
     if (err != seL4_NoError) {
@@ -252,6 +289,7 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
         return false;
     }
 
+    printf("aaaaaaaaaaaa\n");
     /* bind sched context, set fault endpoint and priority
      * In MCS, fault end point needed here should be in current thread's cspace.
      * NOTE this will use the unbadged ep unlike above, you might want to mint it with a badge
@@ -263,9 +301,11 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
         return false;
     }
 
+    printf("aaaaaaaaaaaa\n");
     /* Provide a name for the thread -- Helpful for debugging */
     NAME_THREAD(tty_test_process.tcb, app_name);
 
+    printf("aaaaaaaaaaaa\n");
     /* parse the cpio image */
     ZF_LOGI("\nStarting \"%s\"...\n", app_name);
     elf_t elf_file = {};
@@ -282,18 +322,21 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
         return -1;
     }
 
+    printf("aaaaaaaaaaaa\n");
     /* set up the stack */
-    seL4_Word sp = init_process_stack(cspace, seL4_CapInitThreadVSpace, &elf_file);
+    seL4_Word sp = init_process_stack(cspace, seL4_CapInitThreadVSpace, &elf_file, coro);
 
     vaddr_t heap_start;
 
+    printf("aaaaaaaaaaaa\n");
     /* load the elf image from the cpio file */
-    err = elf_load(cspace, tty_test_process.vspace, &elf_file, tty_test_process.addrspace, &heap_start);
+    err = elf_load(cspace, tty_test_process.vspace, &elf_file, tty_test_process.addrspace, &heap_start, coro);
     if (err) {
         ZF_LOGE("Failed to load elf image");
         return false;
     }
 
+    printf("aaaaaaaaaaaa\n");
     /* set up the heap */
     err = as_define_heap(tty_test_process.addrspace, heap_start);
     if (err) {
@@ -301,16 +344,19 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep)
         return 0;
     }
 
+    printf("aaaaaaaaaaaa\n");
     /* Map in the IPC buffer for the thread */
-    err = sos_map_frame(tty_test_process.addrspace, cspace, tty_test_process.ipc_buffer.frame, tty_test_process.vspace, PROCESS_IPC_BUFFER,
-                    seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, NULL);
+    err = sos_map_frame(tty_test_process.addrspace, cspace, tty_test_process.ipc_buffer.frame, PROCESS_IPC_BUFFER,
+                    seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, NULL, coro);
     if (err != 0) {
         ZF_LOGE("Unable to map IPC buffer for user app");
         return false;
     }
 
+    printf("aaaaaaaaaaaa\n");
     fdtable_init(&tty_test_process.fdt);
 
+    printf("aaaaaaaaaaaa\n");
     /* Start the new process */
     seL4_UserContext context = {
         .pc = elf_getEntryPoint(&elf_file),

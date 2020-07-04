@@ -19,7 +19,7 @@ IMPLEMENT_SYSCALL(open, 3) {
     }
     int flags = seL4_GetMR(3);
 
-    int err = copy_in(cspace, proc->addrspace, pathname_ptr, pathlen, pathname);
+    int err = copy_in(cspace, proc->addrspace, pathname_ptr, pathlen, pathname, me);
     //int err = copy_in(cspace, proc->vspace, proc->addrspace, pathname_ptr, pathlen, pathname);
     if (err) return return_word(-EINVAL);
     pathname[pathlen] = '\0';
@@ -89,11 +89,11 @@ static inline seL4_MessageInfo_t read_write(SYSCALL_PARAMS, int is_write) {
         size_t rem = remaining < PAGE_SIZE_4K ? remaining : PAGE_SIZE_4K;
         int nb;
         if (is_write) {
-            if (uio_uinit(&myuio, vaddr, rem, 0, UIO_READ, cspace, proc->addrspace)) return return_word(-1);
+            if (uio_uinit(&myuio, vaddr, rem, 0, UIO_READ, cspace, proc->addrspace, me)) return return_word(-1);
             if (myuio.iovec.len < rem) rem = myuio.iovec.len;
             nb = VOP_WRITE(fdesc_node->vnode, &myuio, me);
         } else {
-            if (uio_uinit(&myuio, vaddr, rem, 0, UIO_WRITE, cspace, proc->addrspace)) return return_word(-1);
+            if (uio_uinit(&myuio, vaddr, rem, 0, UIO_WRITE, cspace, proc->addrspace, me)) return return_word(-1);
             if (myuio.iovec.len < rem) rem = myuio.iovec.len;
             nb = VOP_READ(fdesc_node->vnode, &myuio, me);
             // printf("%d %d\n", nb, rem);
@@ -129,7 +129,7 @@ IMPLEMENT_SYSCALL(getdirent, 3) {
     if (nbyte > PATH_MAX) nbyte = PATH_MAX;
     int ret = vfs_getdirent(pos, pathname, nbyte, me);
     if (ret >= 0) {
-        if (copy_out(cspace, proc->addrspace, name_ptr, ret, pathname) != 0)
+        if (copy_out(cspace, proc->addrspace, name_ptr, ret, pathname, me) != 0)
             ret = -1;
     }
     // printf("WE SHOULD RETURN %d\n", ret);
@@ -145,13 +145,13 @@ IMPLEMENT_SYSCALL(stat, 3) {
     if (pathlen > PATH_MAX) {
         return return_word(-ENAMETOOLONG);
     }
-    int err = copy_in(cspace, proc->addrspace, pathname_ptr, pathlen, pathname);
+    int err = copy_in(cspace, proc->addrspace, pathname_ptr, pathlen, pathname, me);
     if (err) return return_word(-EINVAL);
     pathname[pathlen] = '\0';
     sos_stat_t stat;
     int ret = vfs_stat(pathname, &stat, me);
     if (ret == 0) {
-        if(copy_out(cspace, proc->addrspace, (vaddr_t) stat_ptr, sizeof(sos_stat_t), &stat) != 0)
+        if(copy_out(cspace, proc->addrspace, (vaddr_t) stat_ptr, sizeof(sos_stat_t), &stat, me) != 0)
             ret = -EINVAL;
     }
     return return_word(ret);

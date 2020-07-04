@@ -10,9 +10,9 @@ int uio_kinit(uio_t *uio, void *data, size_t size, size_t offset, enum uio_rw rw
     return 0;
 }
 
-int uio_uinit(uio_t *uio, vaddr_t data, size_t size, size_t offset, enum uio_rw rw, cspace_t *cspace, addrspace_t *as) {
+int uio_uinit(uio_t *uio, vaddr_t data, size_t size, size_t offset, enum uio_rw rw, cspace_t *cspace, addrspace_t *as, coro_t coro) {
     uio->rw = rw;
-    uio->iovec.base = map_vaddr_to_sos(cspace, as, data, &(uio->cptr), &(uio->iovec.len));
+    uio->iovec.base = map_vaddr_to_sos(cspace, as, data, &(uio->cptr), &(uio->iovec.len), coro);
     if (size < uio->iovec.len) uio->iovec.len = size;
     uio->offset = offset;
     uio->segflag = UIO_USERSPACE;

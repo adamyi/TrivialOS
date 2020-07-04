@@ -48,6 +48,7 @@
 #include "irq.h"
 #include "ut.h"
 #include "fs/nfs.h"
+#include "vm/frame_table.h"
 
 
 #ifndef SOS_NFS_DIR
@@ -209,7 +210,7 @@ void dhcp_callback(void *cli, int code)
     dhcp_status = DHCP_STATUS_FINISHED;
 }
 
-void network_init(cspace_t *cspace, void *timer_vaddr, seL4_CPtr irq_ntfn)
+void network_init(cspace_t *cspace, void *timer_vaddr, seL4_CPtr irq_ntfn, void (*init_cb)())
 {
     int error;
     ZF_LOGI("\nInitialising network...\n\n");
@@ -281,15 +282,16 @@ void network_init(cspace_t *cspace, void *timer_vaddr, seL4_CPtr irq_ntfn)
 
     nfs = nfs_init_context();
     ZF_LOGF_IF(nfs == NULL, "Failed to init NFS context");
+    nfs_umask(nfs, 0000);
 
     nfs_set_debug(nfs, 10);
     sprintf(nfs_dir_buf, "%s-%d-root", SOS_NFS_DIR, ip_octet);
-    int ret = nfs_mount_async(nfs, CONFIG_SOS_GATEWAY, nfs_dir_buf, nfs_mount_cb, NULL);
+    int ret = nfs_mount_async(nfs, CONFIG_SOS_GATEWAY, nfs_dir_buf, nfs_mount_cb, init_cb);
     ZF_LOGF_IF(ret != 0, "NFS Mount failed: %s", nfs_get_error(nfs));
 }
 
 void nfs_mount_cb(int status, UNUSED struct nfs_context *nfs, void *data,
-                  UNUSED void *private_data)
+                  void *private_data)
 {
     if (status < 0) {
         ZF_LOGF("mount/mnt call failed with \"%s\"\n", (char *)data);
@@ -297,4 +299,5 @@ void nfs_mount_cb(int status, UNUSED struct nfs_context *nfs, void *data,
 
     printf("Mounted nfs dir %s\n", nfs_dir_buf);
     sos_nfs_init(nfs);
+    pager_init(private_data);
 }

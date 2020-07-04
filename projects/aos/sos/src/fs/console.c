@@ -12,17 +12,25 @@
 #define CONSOLE_BUFFER_SIZE (PAGE_SIZE_4K)
 
 vnode_ops_t console_ops = {
-                .vop_open  = NULL, 
-                .vop_read  = console_read,
-                .vop_write = console_write,
-                .vop_close = console_close
+                .vop_open       = NULL, 
+                .vop_read       = console_read,
+                .vop_write      = console_write,
+                .vop_pread      = NULL,
+                .vop_pwrite     = NULL,
+                .vop_close      = console_close,
+                .vop_stat       = NULL,
+                .vop_get_dirent = NULL
 };
 
 vnode_ops_t root_console_ops = {
-                .vop_open  = console_open, 
-                .vop_read  = NULL,
-                .vop_write = NULL,
-                .vop_close = NULL
+                .vop_open       = console_open, 
+                .vop_read       = NULL,
+                .vop_write      = NULL,
+                .vop_pread      = NULL,
+                .vop_pwrite     = NULL,
+                .vop_close      = NULL,
+                .vop_stat       = NULL,
+                .vop_get_dirent = NULL
 };
 
 static struct serial *handle;

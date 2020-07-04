@@ -23,17 +23,19 @@ region_t *region_create(vaddr_t vaddr, size_t sz,
     return r;
 }
 
-addrspace_t *as_create() {
+addrspace_t *as_create(seL4_CPtr vspace) {
     addrspace_t *ret = malloc(sizeof(addrspace_t));
     if (ret == NULL) return NULL;
     bzero(ret, sizeof(addrspace_t));
 
-    ret->pagetable = alloc_frame();
+    ret->pagetable = alloc_frame(NULL);
+    pin_frame(ret->pagetable);
     if (ret->pagetable == NULL_FRAME) {
         free(ret);
         return NULL;
     }
     memset(frame_data(ret->pagetable), 0, PAGE_SIZE_4K);
+    ret->vspace = vspace;
 
     return ret;
 }

@@ -4,6 +4,9 @@
  * http://creativecommons.org/publicdomain/zero/1.0/
  */
 
+#pragma GCC push_options
+#pragma GCC optimize ("O0")
+
 #include <assert.h>
 #include <setjmp.h>
 #include <stdlib.h>
@@ -152,5 +155,7 @@ void coroutine_start(void) {
 	char stack[16 * 1024];
 	coroutine_main(stack);
 }
+
+#pragma GCC pop_options
 
 /* eof */

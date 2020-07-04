@@ -11,13 +11,25 @@
  */
 #pragma once
 
-#include "bootstrap.h"
-#include "ut.h"
+#include "../bootstrap.h"
+#include "../ut.h"
+
+#include "../coroutine/picoro.h"
 
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <cspace/cspace.h>
+
+// 2GB
+// #define PAGEFILE_PAGES ((1) << (19))
+
+// 8MB
+#define PAGEFILE_PAGES ((1) << (11))
+
+typedef struct pte pte_t;
+typedef struct pde pde_t;
+
 
 /*
  * Every frame in the frame table is referenced by a compact index into
@@ -62,8 +74,12 @@ PACKED struct frame {
     frame_ref_t next : 19;
     /* Indicates which list the frame is in. */
     list_id_t list_id : 2;
-    /* Unused bits */
-    size_t unused : 4;
+    /* clock chance */
+    bool ref : 1;
+    /* don't evict */
+    bool pin : 1;
+    /* pointer back to pte */
+    struct pte *pte;
 };
 compile_time_assert("Small CPtr size", 20 >= INITIAL_TASK_CSPACE_BITS);
 
@@ -103,7 +119,7 @@ cspace_t *frame_table_cspace(void);
  * You will need to modify the frame table to deal with the case where
  * only a limited number of frames may be held by the frame table.
  */
-frame_ref_t alloc_frame(void);
+frame_ref_t alloc_frame(coro_t coro);
 
 /*
  * Free a frame allocated by the frame table.
@@ -139,6 +155,10 @@ void flush_frame(frame_ref_t frame_ref);
  */
 void invalidate_frame(frame_ref_t frame_ref);
 
+void pin_frame(frame_ref_t frame_ref);
+void unpin_frame(frame_ref_t frame_ref);
+void set_frame_pte(frame_ref_t frame_ref, pte_t *pte);
+
 /*
  * Get the capability to the page used to map the frame into SOS.
  *
@@ -153,3 +173,7 @@ seL4_ARM_Page frame_page(frame_ref_t frame_ref);
  * This should only be used for debugging.
  */
 frame_t *frame_from_ref(frame_ref_t frame_ref);
+
+int page_out(frame_ref_t frame_ref, coro_t coro);
+int page_in(frame_ref_t ref, size_t pfidx, coro_t coro);
+void pager_init(void (*cb)());

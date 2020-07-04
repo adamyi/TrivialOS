@@ -10,10 +10,13 @@
  * @TAG(DATA61_GPL)
  */
 #include "frame_table.h"
-#include "mapping.h"
-#include "vmem_layout.h"
+#include "../mapping.h"
+#include "../vmem_layout.h"
+#include "pagetable.h"
+#include "../vfs/vfs.h"
 
 #include <assert.h>
+#include <fcntl.h>
 #include <string.h>
 #include <stdbool.h>
 #include <utils/util.h>
@@ -87,6 +90,8 @@ static void push_back(frame_list_t *list, frame_t *frame);
 static frame_t *pop_front(frame_list_t *list);
 static void remove_frame(frame_list_t *list, frame_t *frame);
 
+static vnode_t *pf_vnode;
+
 /*
  * Allocate a frame at a particular address in SOS.
  *
@@ -109,13 +114,57 @@ void frame_table_init(cspace_t *cspace, seL4_CPtr vspace)
     frame_table.vspace = vspace;
 }
 
+static void (*init_cb)();
+static char pageused[PAGEFILE_PAGES / 8];
+static int last_page;
+
+static void *pager_open(void *arg) {
+    int err = vfs_open("pagefile", O_RDWR | O_CREAT, &pf_vnode, (coro_t) arg);
+    assert(err == 0);
+    init_cb();
+    return NULL;
+}
+
+void pager_init(void (*cb)()) {
+    init_cb = cb;
+    memset(pageused, 0, sizeof(pageused));
+    last_page = 0;
+    coro_t coro = coroutine(pager_open);
+    resume(coro, coro);
+}
+
 cspace_t *frame_table_cspace(void)
 {
     return frame_table.cspace;
 }
 
-frame_ref_t alloc_frame(void)
-{
+static frame_ref_t find_victim() {
+    // printf("find_victim\n");
+    if (frame_table.allocated.first == NULL_FRAME) return NULL_FRAME;
+    frame_t *first = frame_from_ref(frame_table.allocated.first);
+    bool has_unpinned = false;
+    frame_t *frame = pop_front(&frame_table.allocated);
+    do {
+       if (!frame->pin) {
+           printf("find_victim %d %d %p\n", ref_from_frame(frame), frame->ref, frame);
+           has_unpinned = true;
+           if (!frame->ref) {
+               push_back(&frame_table.allocated, frame);
+               return ref_from_frame(frame);
+           }
+           frame->ref = 0;
+           seL4_Error err = seL4_ARM_Page_Unmap(frame->pte->cap);
+           assert(err == seL4_NoError);
+       }
+       push_back(&frame_table.allocated, frame);
+       frame = pop_front(&frame_table.allocated);
+   } while(has_unpinned || frame != first);
+   push_back(&frame_table.allocated, frame);
+   return NULL_FRAME;
+}
+
+frame_ref_t alloc_frame(coro_t coro) {
+    // printf("alloc_frame\n");
     frame_t *frame = pop_front(&frame_table.free);
 
     if (frame == NULL) {
@@ -124,9 +173,96 @@ frame_ref_t alloc_frame(void)
 
     if (frame != NULL) {
         push_back(&frame_table.allocated, frame);
+        return ref_from_frame(frame);
+    }
+    frame_ref_t victim = find_victim();
+    if (victim == NULL_FRAME) {
+        return NULL_FRAME;
     }
 
-    return ref_from_frame(frame);
+    if (page_out(victim, coro)) return NULL_FRAME;
+
+    return victim;
+}
+
+// written by kernel engineer
+// it uses bitwise calculation so it must be correct
+static inline int pf_getidx() {
+    if (last_page == PAGEFILE_PAGES) last_page = 0;
+    int fp = last_page, i = last_page >> 3, j = 1 << (last_page & 7);
+    do {
+        printf("pageused[%d] (%d) & %d\n", i, pageused[i], j);
+        if (!(pageused[i] & j)) {
+            pageused[i] |= j;
+            printf("return last_page %d\n", last_page);
+            return last_page++;
+        }
+        j <<= 1;
+        if (j == 0x100) {
+            i++;
+            j = 1;
+        }
+        if (++last_page == PAGEFILE_PAGES) last_page = 0;
+    } while (last_page != fp);
+    return -1;
+}
+
+static inline void pf_setfree(int pfidx) {
+    pageused[pfidx >> 3] &= ~(1 << (pfidx & 7));
+}
+
+int page_out(frame_ref_t frame_ref, coro_t coro) {
+    frame_t *frame = frame_from_ref(frame_ref);
+    frame->pin = 1;
+
+    int pfidx = pf_getidx();
+    if (pfidx < 0) {
+        ZF_LOGE("pagefile is full");
+        return 1;
+    }
+    ZF_LOGE("page out %d to pf %d", frame_ref, pfidx);
+
+    cspace_delete(frame_table.cspace, frame->pte->cap);
+    cspace_free_slot(frame_table.cspace, frame->pte->cap);
+    frame->pte->cap = seL4_CapNull;
+
+    frame->pte->type = PAGED_OUT;
+    frame->pte->frame = pfidx;
+
+    uio_t myuio;
+
+    uio_kinit(&myuio, frame_data(frame_ref), PAGE_SIZE_4K, pfidx * PAGE_SIZE_4K, UIO_READ);
+    if (VOP_PWRITE(pf_vnode, &myuio, coro) != PAGE_SIZE_4K) {
+        ZF_LOGE("page_out: VOP_PWRITE not entire page");
+        return 1;
+    }
+    
+    frame->pin = 0;
+
+    frame->ref = 0;
+    frame->pte = NULL;
+
+    return 0;
+}
+
+int page_in(frame_ref_t ref, size_t pfidx, coro_t coro) {
+    ZF_LOGE("page in %d from pf %d", ref, pfidx);
+    frame_t *frame = frame_from_ref(ref);
+    frame->pin = 1;
+
+    uio_t myuio;
+
+    uio_kinit(&myuio, frame_data(ref), PAGE_SIZE_4K, pfidx * PAGE_SIZE_4K, UIO_WRITE);
+    if (VOP_PREAD(pf_vnode, &myuio, coro) != PAGE_SIZE_4K) {
+        ZF_LOGE("page_in: VOP_PREAD  not entire page");
+        return 1;
+    }
+
+    frame->pin = 0;
+
+    pf_setfree(pfidx);
+
+    return 0;
 }
 
 void free_frame(frame_ref_t frame_ref)
@@ -163,6 +299,23 @@ void invalidate_frame(frame_ref_t frame_ref)
 {
     frame_t *frame = frame_from_ref(frame_ref);
     seL4_ARM_Page_Invalidate_Data(frame->sos_page, 0, BIT(seL4_PageBits));
+}
+
+void pin_frame(frame_ref_t frame_ref) {
+    frame_t *frame = frame_from_ref(frame_ref);
+    frame->pin = 1;
+}
+
+void unpin_frame(frame_ref_t frame_ref) {
+    frame_t *frame = frame_from_ref(frame_ref);
+    frame->pin = 0;
+}
+
+void set_frame_pte(frame_ref_t frame_ref, pte_t *pte) {
+    printf("set_frame_pte %d %p\n", frame_ref, pte);
+    frame_t *frame = frame_from_ref(frame_ref);
+    frame->pte = pte;
+    frame->ref = 1;
 }
 
 frame_t *frame_from_ref(frame_ref_t frame_ref)
@@ -320,6 +473,7 @@ static frame_t *alloc_fresh_frame(void)
     *frame = (frame_t) {
         .sos_page = sos_page,
         .list_id = NO_LIST,
+        .pin = 0,
     };
 
     ZF_LOGD("Frame table contains %lu/%lu frames", frame_table.used, frame_table.capacity);

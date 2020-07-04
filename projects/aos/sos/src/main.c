@@ -30,7 +30,7 @@
 #include "bootstrap.h"
 #include "irq.h"
 #include "network.h"
-#include "frame_table.h"
+#include "vm/frame_table.h"
 #include "drivers/uart.h"
 #include "ut.h"
 #include "vmem_layout.h"
@@ -95,7 +95,7 @@ NORETURN void syscall_loop(seL4_CPtr ep)
             cspace_free_slot(&cspace, reply);
             ut_free(reply_ut);
         } else if (label == seL4_Fault_VMFault) {
-            // debug_print_fault(message, "lolololol");
+            debug_print_fault(message, "lolololol");
             seL4_Fault_t fault = seL4_getFault(message);
             handle_vm_fault(&cspace, seL4_Fault_VMFault_get_Addr(fault), seL4_Fault_VMFault_get_FSR(fault), &tty_test_process, reply, reply_ut);
         } else if (label == seL4_Fault_NullFault) {
@@ -178,10 +178,20 @@ void init_muslc(void)
     muslcsys_install_syscall(__NR_madvise, sys_madvise);
 }
 
+// TODO: look at this
+static seL4_CPtr ipc_ep;
+
+static void start_sosh() {
+    /* Start the user application */
+    printf("Start first process\n");
+    bool success = start_first_process(&cspace, TTY_NAME, ipc_ep);
+    ZF_LOGF_IF(!success, "Failed to start first process");
+}
+
 NORETURN void *main_continued(UNUSED void *arg)
 {
     /* Initialise other system compenents here */
-    seL4_CPtr ipc_ep, ntfn;
+    seL4_CPtr ntfn;
     sos_ipc_init(&ipc_ep, &ntfn);
     sos_init_irq_dispatch(
         &cspace,
@@ -202,7 +212,7 @@ NORETURN void *main_continued(UNUSED void *arg)
 
     /* Initialise the network hardware. */
     printf("Network init\n");
-    network_init(&cspace, timer_vaddr, ntfn);
+    network_init(&cspace, timer_vaddr, ntfn, start_sosh);
 
     /* Initialises the timer */
     printf("Timer init\n");
@@ -216,11 +226,6 @@ NORETURN void *main_continued(UNUSED void *arg)
 
     /* Initialize console */
     console_init();
-
-    /* Start the user application */
-    printf("Start first process\n");
-    bool success = start_first_process(&cspace, TTY_NAME, ipc_ep);
-    ZF_LOGF_IF(!success, "Failed to start first process");
 
     printf("\nSOS entering syscall loop\n");
     init_threads(ipc_ep, sched_ctrl_start, sched_ctrl_end);

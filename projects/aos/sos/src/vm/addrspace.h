@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <utils/util.h>
 
-#include "../frame_table.h"
+#include "frame_table.h"
 
 #define VEND(x) ((x->vbase)+(x->memsize))
 
@@ -26,9 +26,10 @@ typedef struct addrspace {
     struct region *stack;
     struct region *heap;
     frame_ref_t pagetable;
+    seL4_CPtr vspace;
 } addrspace_t;
 
-addrspace_t *as_create();
+addrspace_t *as_create(seL4_CPtr vspace);
 void as_destroy(addrspace_t *as, cspace_t *cspace);
 int as_define_stack(struct addrspace *as, vaddr_t bottom, size_t sz);
 int as_define_heap(struct addrspace *as, vaddr_t start);

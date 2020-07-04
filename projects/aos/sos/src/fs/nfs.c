@@ -12,6 +12,8 @@ vnode_ops_t nfs_ops = {
                 .vop_open       = NULL, 
                 .vop_read       = sos_nfs_read,
                 .vop_write      = sos_nfs_write,
+                .vop_pread      = sos_nfs_pread,
+                .vop_pwrite     = sos_nfs_pwrite,
                 .vop_close      = sos_nfs_close,
                 .vop_stat       = NULL,
                 .vop_get_dirent = NULL
@@ -21,6 +23,8 @@ vnode_ops_t root_nfs_ops = {
                 .vop_open       = sos_nfs_open, 
                 .vop_read       = NULL,
                 .vop_write      = NULL,
+                .vop_pread      = NULL,
+                .vop_pwrite     = NULL,
                 .vop_close      = NULL,
                 .vop_stat       = sos_nfs_stat,
                 .vop_get_dirent = sos_nfs_get_dirent
@@ -56,6 +60,17 @@ static void sos_nfs_cb(int status, UNUSED struct nfs_context *nfs, void *data, v
 }
 
 int sos_nfs_open(vnode_t *object, char *pathname, int flags_from_open, vnode_t **ret, coro_t me) {
+    /* Get file stat */
+    sos_stat_t file_stat;
+    int err = sos_nfs_stat(object, pathname, &file_stat, me);
+    printf("flags_from_open: %x, err %x, stat %x\n", flags_from_open, err, file_stat.st_fmode);
+    if ((err == -1 && (flags_from_open & O_ACCMODE) == O_RDONLY) || // if file doesn't exist and we try to read
+        (err != -1 && (flags_from_open & O_ACCMODE) == O_RDONLY && !(file_stat.st_fmode & FM_READ)) || // read from write-only file
+        (err != -1 && (flags_from_open & O_ACCMODE) == O_WRONLY && !(file_stat.st_fmode & FM_WRITE))|| // write to read-only file
+        (err != -1 && (flags_from_open & O_ACCMODE) == O_RDWR && (file_stat.st_fmode & FM_RDWR) != FM_RDWR)) // read-write
+        return -1;
+
+    /* Open file */
     res_cb_t cb_ret = {
         .coro = me,
         .status = 0,
@@ -108,6 +123,37 @@ int sos_nfs_write(vnode_t *file, struct uio *uio, coro_t me) {
     return cb_ret.status;
 }
 
+int sos_nfs_pread(vnode_t *file, struct uio *uio, coro_t me) {
+    res_cb_t cb_ret = {
+        .coro = me,
+        .status = 0,
+        .data = NULL
+    };
+    if (nfs_pread_async(sos_nfs, (struct nfsfh *) file->data, uio->offset, uio->iovec.len, sos_nfs_cb, &cb_ret) < 0) return -1;
+    yield(NULL);
+    if (cb_ret.status >= 0) {
+        uio->iovec.len = cb_ret.status;
+        memcpy(uio->iovec.base, cb_ret.data, cb_ret.status);
+    } else {
+        ZF_LOGE("Error reading from NFS: %s", cb_ret.data);
+    }
+    return cb_ret.status;
+}
+
+int sos_nfs_pwrite(vnode_t *file, struct uio *uio, coro_t me) {
+    res_cb_t cb_ret = {
+        .coro = me,
+        .status = 0,
+        .data = NULL
+    };
+    if (nfs_pwrite_async(sos_nfs, (struct nfsfh *) file->data, uio->offset, uio->iovec.len, uio->iovec.base, sos_nfs_cb, &cb_ret) < 0) return -1;
+    yield(NULL);
+    if (cb_ret.status < 0) {
+        ZF_LOGE("Error writing to NFS: %s", cb_ret.data);
+    }
+    return cb_ret.status;
+}
+
 int sos_nfs_close(vnode_t *vnode, coro_t me) {
     res_cb_t cb_ret = {
         .coro = me,
@@ -135,7 +181,7 @@ int sos_nfs_stat(vnode_t *vnode, char *pathname, sos_stat_t *stat, coro_t me) {
     yield(NULL);
     if (cb_ret.status == 0) {
         stat->st_type  = ((struct nfs_stat_64 *) cb_ret.data)->nfs_mode & 0170000;
-        stat->st_fmode = ((struct nfs_stat_64 *) cb_ret.data)->nfs_mode & 07777;
+        stat->st_fmode = ((struct nfs_stat_64 *) cb_ret.data)->nfs_mode & 0777;
         stat->st_size  = ((struct nfs_stat_64 *) cb_ret.data)->nfs_size;
         stat->st_ctime = ((struct nfs_stat_64 *) cb_ret.data)->nfs_ctime;
         stat->st_atime = ((struct nfs_stat_64 *) cb_ret.data)->nfs_atime;

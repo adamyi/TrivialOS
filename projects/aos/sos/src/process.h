@@ -6,7 +6,7 @@
 #include "vm/addrspace.h"
 #include "vm/pagetable.h"
 #include "ut.h"
-#include "frame_table.h"
+#include "vm/frame_table.h"
 
 // #define TTY_NAME             "tty_test"
 #define TTY_NAME             "sosh"
