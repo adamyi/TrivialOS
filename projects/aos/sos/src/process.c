@@ -1,6 +1,7 @@
 #include <aos/debug.h>
 #include <cpio/cpio.h>
 #include <elf/elf.h>
+#include <fcntl.h>
 
 #include <sel4runtime.h>
 #include <sel4runtime/auxv.h>
@@ -31,7 +32,7 @@ static int stack_write(seL4_Word *mapped_stack, int index, uintptr_t val)
 
 /* set up System V ABI compliant stack, so that the process can
  * start up and initialise the C library */
-static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, elf_t *elf_file, coro_t coro)
+static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, elf_t *elf_file, vnode_t *elf_vnode, coro_t coro)
 {
 
     /* virtual addresses in the target process' address space */
@@ -44,11 +45,12 @@ static uintptr_t init_process_stack(cspace_t *cspace, seL4_CPtr local_vspace, el
 
 
     /* find the vsyscall table */
-    uintptr_t sysinfo = *((uintptr_t *) elf_getSectionNamed(elf_file, "__vsyscall", NULL));
-    if (sysinfo == 0) {
+    uintptr_t sysinfo;
+    if (0 > elf_find_vsyscall(elf_file, elf_vnode, &sysinfo, coro)) {
         ZF_LOGE("could not find syscall table for c library");
         return 0;
     }
+    printf("sysinfo: %p\n", sysinfo);
 
     int err = as_define_stack(tty_test_process.addrspace, PROCESS_STACK_BOTTOM, PAGE_SIZE_4K);
     if (err) {
@@ -308,33 +310,77 @@ void *_start_first_process_impl(void *args) {
     printf("aaaaaaaaaaaa\n");
     /* parse the cpio image */
     ZF_LOGI("\nStarting \"%s\"...\n", app_name);
-    elf_t elf_file = {};
-    unsigned long elf_size;
-    size_t cpio_len = _cpio_archive_end - _cpio_archive;
-    char *elf_base = cpio_get_file(_cpio_archive, cpio_len, app_name, &elf_size);
-    if (elf_base == NULL) {
-        ZF_LOGE("Unable to locate cpio header for %s", app_name);
+
+    vnode_t *elf_vnode;
+    err = vfs_open(app_name, O_RDONLY, &elf_vnode, coro);
+    // TODO: check exec permission
+    if (err) {
+        ZF_LOGE("can't open file");
         return false;
     }
+
+    /* load in header (56/64 bytes) */
+    frame_ref_t headerframe = alloc_frame(coro);
+    if (headerframe == NULL_FRAME) {
+        ZF_LOGE("can't allocate frame");
+        return false;
+    }
+    pin_frame(headerframe);
+    void *headerbytes = frame_data(headerframe);
+
+    uio_t myuio;
+    if (uio_kinit(&myuio, headerbytes, PAGE_SIZE_4K, 0, UIO_WRITE)) {
+        ZF_LOGE("can't uio_kinit");
+        unpin_frame(headerframe);
+        free_frame(headerframe);
+        return false;
+    }
+    int headersize = VOP_READ(elf_vnode, &myuio, coro);
+    if (headersize < 0) {
+        ZF_LOGE("can't read elf file");
+        unpin_frame(headerframe);
+        free_frame(headerframe);
+        return false;
+    }
+    uio_destroy(&myuio, NULL);
+
+    elf_t elf_file = {};
+
     /* Ensure that the file is an elf file. */
-    if (elf_newFile(elf_base, elf_size, &elf_file)) {
+    /* we only check ELF header and program header table without checking section header table */
+    char *fuck = headerbytes;
+    printf("%x %x %x %x\n%d\n", *fuck, *(fuck+1), *(fuck+2), *(fuck+3), headersize);
+    if (elf_newFile_maybe_unsafe(headerbytes, headersize, true, false, &elf_file)) {
         ZF_LOGE("Invalid elf file");
-        return -1;
+        unpin_frame(headerframe);
+        free_frame(headerframe);
+        return false;
     }
 
     printf("aaaaaaaaaaaa\n");
     /* set up the stack */
-    seL4_Word sp = init_process_stack(cspace, seL4_CapInitThreadVSpace, &elf_file, coro);
+    seL4_Word sp = init_process_stack(cspace, seL4_CapInitThreadVSpace, &elf_file, elf_vnode, coro);
+    if (sp == 0) {
+        ZF_LOGE("Failed to set up stack");
+        unpin_frame(headerframe);
+        free_frame(headerframe);
+        return false;
+    }
 
     vaddr_t heap_start;
 
     printf("aaaaaaaaaaaa\n");
     /* load the elf image from the cpio file */
-    err = elf_load(cspace, tty_test_process.vspace, &elf_file, tty_test_process.addrspace, &heap_start, coro);
+    err = elf_load(cspace, tty_test_process.vspace, &elf_file, elf_vnode, tty_test_process.addrspace, &heap_start, coro);
     if (err) {
         ZF_LOGE("Failed to load elf image");
+        unpin_frame(headerframe);
+        free_frame(headerframe);
         return false;
     }
+
+    unpin_frame(headerframe);
+    free_frame(headerframe);
 
     printf("aaaaaaaaaaaa\n");
     /* set up the heap */

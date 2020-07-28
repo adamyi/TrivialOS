@@ -146,7 +146,7 @@ static frame_ref_t find_victim() {
     frame_t *frame = pop_front(&frame_table.allocated);
     do {
        if (!frame->pin) {
-           printf("find_victim %d %d %p\n", ref_from_frame(frame), frame->ref, frame);
+           // printf("find_victim %d %d %p\n", ref_from_frame(frame), frame->ref, frame);
            has_unpinned = true;
            if (!frame->ref) {
                push_back(&frame_table.allocated, frame);
@@ -191,10 +191,10 @@ static inline int pf_getidx() {
     if (last_page == PAGEFILE_PAGES) last_page = 0;
     int fp = last_page, i = last_page >> 3, j = 1 << (last_page & 7);
     do {
-        printf("pageused[%d] (%d) & %d\n", i, pageused[i], j);
+        // printf("pageused[%d] (%d) & %d\n", i, pageused[i], j);
         if (!(pageused[i] & j)) {
             pageused[i] |= j;
-            printf("return last_page %d\n", last_page);
+            // printf("return last_page %d\n", last_page);
             return last_page++;
         }
         j <<= 1;
@@ -312,7 +312,7 @@ void unpin_frame(frame_ref_t frame_ref) {
 }
 
 void set_frame_pte(frame_ref_t frame_ref, pte_t *pte) {
-    printf("set_frame_pte %d %p\n", frame_ref, pte);
+    // printf("set_frame_pte %d %p\n", frame_ref, pte);
     frame_t *frame = frame_from_ref(frame_ref);
     frame->pte = pte;
     frame->ref = 1;

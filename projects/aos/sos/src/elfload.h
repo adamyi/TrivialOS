@@ -14,9 +14,15 @@
 #include <sel4/sel4.h>
 #include <cspace/cspace.h>
 #include <elf/elf.h>
+#include <elf/elf32.h>
+#include <elf/elf64.h>
 #include <elf.h>
 
 #include "vm/addrspace.h"
+#include "vfs/vfs.h"
 #include "coroutine/picoro.h"
 
-int elf_load(cspace_t *cspace, seL4_CPtr loadee_vspace, elf_t *elf_file, addrspace_t *as, vaddr_t *end, coro_t coro);
+int elf_load(cspace_t *cspace, seL4_CPtr loadee_vspace, elf_t *elf_file, vnode_t *elf_vnode, addrspace_t *as, vaddr_t *end, coro_t coro);
+
+int elf_getSectionNamed_v(elf_t *elfFile, vnode_t *vnode, const char *str, uintptr_t *result, coro_t coro);
+int elf_find_vsyscall(elf_t *elfFile, vnode_t *vnode, uintptr_t *result, coro_t coro);

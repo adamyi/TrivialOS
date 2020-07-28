@@ -73,7 +73,7 @@ static inline seL4_CapRights_t get_sel4_rights_from_elf(unsigned long permission
  * @return
  *
  */
-static int load_segment_into_vspace(addrspace_t *as, cspace_t *cspace, seL4_CPtr loadee, char *src, size_t segment_size,
+static int load_segment_into_vspace(addrspace_t *as, cspace_t *cspace, seL4_CPtr loadee, vnode_t *vnode, size_t offset, size_t segment_size,
                                     size_t file_size, uintptr_t dst, seL4_CapRights_t permissions, seL4_ARM_VMAttributes attr, coro_t coro)
 {
     assert(file_size <= segment_size);
@@ -124,7 +124,21 @@ static int load_segment_into_vspace(addrspace_t *as, cspace_t *cspace, seL4_CPtr
         size_t segment_bytes = PAGE_SIZE_4K - leading_zeroes;
         size_t file_bytes = MIN(segment_bytes, file_size - pos);
         if (pos < file_size) {
-            memcpy(loader_data, src, file_bytes);
+            // memcpy(loader_data, src, file_bytes);
+            // TODO
+            uio_t myuio;
+            if (uio_kinit(&myuio, loader_data, file_bytes, offset, UIO_WRITE)) {
+                ZF_LOGE("can't uio_kinit");
+                unmap_vaddr_from_sos(cspace, lcptr);
+                return -1;
+            }
+            int readbytes = VOP_PREAD(vnode, &myuio, coro);
+            if (readbytes != file_bytes) {
+                ZF_LOGE("can't read elf file");
+                unmap_vaddr_from_sos(cspace, lcptr);
+                return -1;
+            }
+            uio_destroy(&myuio, NULL);
         } else {
             memset(loader_data, 0, file_bytes);
         }
@@ -149,12 +163,12 @@ static int load_segment_into_vspace(addrspace_t *as, cspace_t *cspace, seL4_CPtr
 
         pos += segment_bytes;
         dst += segment_bytes;
-        src += segment_bytes;
+        offset += segment_bytes;
     }
     return 0;
 }
 
-int elf_load(cspace_t *cspace, seL4_CPtr loadee_vspace, elf_t *elf_file, addrspace_t *as, vaddr_t *end, coro_t coro) {
+int elf_load(cspace_t *cspace, seL4_CPtr loadee_vspace, elf_t *elf_file, vnode_t *elf_vnode, addrspace_t *as, vaddr_t *end, coro_t coro) {
     *end = 0;
 
     int num_headers = elf_getNumProgramHeaders(elf_file);
@@ -166,7 +180,7 @@ int elf_load(cspace_t *cspace, seL4_CPtr loadee_vspace, elf_t *elf_file, addrspa
         }
 
         /* Fetch information about this segment. */
-        char *source_addr = elf_file->elfFile + elf_getProgramHeaderOffset(elf_file, i);
+        size_t source_offset = elf_getProgramHeaderOffset(elf_file, i);
         size_t file_size = elf_getProgramHeaderFileSize(elf_file, i);
         size_t segment_size = elf_getProgramHeaderMemorySize(elf_file, i);
         uintptr_t vaddr = elf_getProgramHeaderVaddr(elf_file, i);
@@ -184,7 +198,7 @@ int elf_load(cspace_t *cspace, seL4_CPtr loadee_vspace, elf_t *elf_file, addrspa
 
         /* Copy it across into the vspace. */
         ZF_LOGD(" * Loading segment %p-->%p\n", (void *) vaddr, (void *)(vaddr + segment_size));
-        err = load_segment_into_vspace(as, cspace, loadee_vspace, source_addr, segment_size, file_size, vaddr, rights, attr, coro);
+        err = load_segment_into_vspace(as, cspace, loadee_vspace, elf_vnode, source_offset, segment_size, file_size, vaddr, rights, attr, coro);
         if (err) {
             ZF_LOGE("Elf loading failed!");
             return -1;
@@ -193,5 +207,96 @@ int elf_load(cspace_t *cspace, seL4_CPtr loadee_vspace, elf_t *elf_file, addrspa
         printf("elf load\n");
     }
 
+    return 0;
+}
+
+static int elf32_getSectionNamed_v(elf_t *elfFile, vnode_t *vnode, const char *str, uintptr_t *result, coro_t coro) {
+    ZF_LOGE("unimplemented");
+    return -1;
+}
+
+static int elf64_getSectionNamed_v(elf_t *elfFile, vnode_t *vnode, const char *str, uintptr_t *result, coro_t coro) {
+    Elf64_Shdr *sectionTable = NULL;
+    char *shrtrtab_data = NULL;
+
+    size_t strl = strlen(str);
+
+    Elf64_Ehdr header = elf64_getHeader(elfFile);
+    size_t str_table_idx = elf_getSectionStringTableIndex(elfFile);
+    size_t numSections = elf_getNumSections(elfFile);
+    size_t sectionTable_size = sizeof(Elf64_Shdr) * numSections;
+    sectionTable = malloc(sectionTable_size);
+    if (sectionTable == NULL) {
+        ZF_LOGE("can't malloc");
+        goto fail;
+    }
+
+    uio_t myuio;
+    if (uio_kinit(&myuio, sectionTable, sectionTable_size, header.e_shoff, UIO_WRITE)) {
+        ZF_LOGE("can't uio_kinit");
+        goto fail;
+    }
+    if (VOP_PREAD(vnode, &myuio, coro) != sectionTable_size) {
+        ZF_LOGE("can't read elf");
+        goto fail;
+    }
+    uio_destroy(&myuio, NULL);
+
+    Elf64_Shdr *shrtrtab_header = sectionTable + str_table_idx;
+
+    shrtrtab_data = malloc(shrtrtab_header->sh_size);
+    if (shrtrtab_data == NULL) {
+        ZF_LOGE("can't malloc");
+        goto fail;
+    }
+    if (uio_kinit(&myuio, shrtrtab_data, shrtrtab_header->sh_size, shrtrtab_header->sh_offset, UIO_WRITE)) {
+        ZF_LOGE("can't uio_kinit");
+        goto fail;
+    }
+    if (VOP_PREAD(vnode, &myuio, coro) != shrtrtab_header->sh_size) {
+        ZF_LOGE("can't read elf");
+        goto fail;
+    }
+    size_t i = 0;
+    for (Elf64_Shdr *curr = sectionTable; i < numSections; i++, curr++) {
+        if (curr->sh_name + strl >= shrtrtab_header->sh_size)
+            continue;
+        if (strncmp(shrtrtab_data + curr->sh_name, str, strl) == 0) {
+            *result = curr->sh_offset;
+            printf("i found coronavirus cure\n");
+            free(sectionTable);
+            free(shrtrtab_data);
+            return 0;
+        }
+    }
+
+    fail:
+    if (sectionTable) free(sectionTable);
+    if (shrtrtab_data) free(shrtrtab_data);
+    return -1;
+}
+
+// TO_WORK || (!TO_WORK) = 1
+int elf_getSectionNamed_v(elf_t *elfFile, vnode_t *vnode, const char *str, uintptr_t *result, coro_t coro) {
+    if (elf_isElf32(elfFile)) {
+        return elf32_getSectionNamed_v(elfFile, vnode, str, result, coro);
+    }
+    return elf64_getSectionNamed_v(elfFile, vnode, str, result, coro);
+}
+
+int elf_find_vsyscall(elf_t *elfFile, vnode_t *vnode, uintptr_t *result, coro_t coro) {
+    uintptr_t offset;
+    int res = elf_getSectionNamed_v(elfFile, vnode, "__vsyscall", &offset, coro);
+    if (res < 0) return res;
+    uio_t myuio;
+    if (uio_kinit(&myuio, result, sizeof(uintptr_t), offset, UIO_WRITE)) {
+        ZF_LOGE("can't uio_kinit");
+        return -1;
+    }
+    if (VOP_PREAD(vnode, &myuio, coro) != sizeof(uintptr_t)) {
+        ZF_LOGE("can't read elf");
+        return -1;
+    }
+    uio_destroy(&myuio, NULL);
     return 0;
 }

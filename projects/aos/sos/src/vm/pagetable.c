@@ -58,11 +58,11 @@ static inline ut_t *getUt(page_table_t *pt) {
 seL4_Error create_pt(pde_t *entry, coro_t coro) {
     frame_ref_t frame = alloc_frame(coro);
     printf("create_pt %d\n", frame);
-    pin_frame(frame);
     if (frame == NULL_FRAME) {
         ZF_LOGE("Couldn't allocate additional stack frame");
         return seL4_NotEnoughMemory;
     }
+    pin_frame(frame);
     memset(frame_data(frame), 0, PAGE_SIZE_4K);
     entry->inuse = true;
     entry->frame = frame;
