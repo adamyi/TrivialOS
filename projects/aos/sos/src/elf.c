@@ -210,8 +210,66 @@ int elf_load(cspace_t *cspace, seL4_CPtr loadee_vspace, elf_t *elf_file, vnode_t
     return 0;
 }
 
+// NOTE: this is untested because we don't have 32-bit programs to test with
+// and the build system is configured to use aarch64 cross-compiler
 static int elf32_getSectionNamed_v(elf_t *elfFile, vnode_t *vnode, const char *str, uintptr_t *result, coro_t coro) {
-    ZF_LOGE("unimplemented");
+    Elf32_Shdr *sectionTable = NULL;
+    char *shrtrtab_data = NULL;
+
+    size_t strl = strlen(str);
+
+    Elf32_Ehdr header = elf32_getHeader(elfFile);
+    size_t str_table_idx = elf_getSectionStringTableIndex(elfFile);
+    size_t numSections = elf_getNumSections(elfFile);
+    size_t sectionTable_size = sizeof(Elf32_Shdr) * numSections;
+    sectionTable = malloc(sectionTable_size);
+    if (sectionTable == NULL) {
+        ZF_LOGE("can't malloc");
+        goto fail;
+    }
+
+    uio_t myuio;
+    if (uio_kinit(&myuio, sectionTable, sectionTable_size, header.e_shoff, UIO_WRITE)) {
+        ZF_LOGE("can't uio_kinit");
+        goto fail;
+    }
+    if (VOP_PREAD(vnode, &myuio, coro) != sectionTable_size) {
+        ZF_LOGE("can't read elf");
+        goto fail;
+    }
+    uio_destroy(&myuio, NULL);
+
+    Elf32_Shdr *shrtrtab_header = sectionTable + str_table_idx;
+
+    shrtrtab_data = malloc(shrtrtab_header->sh_size);
+    if (shrtrtab_data == NULL) {
+        ZF_LOGE("can't malloc");
+        goto fail;
+    }
+    if (uio_kinit(&myuio, shrtrtab_data, shrtrtab_header->sh_size, shrtrtab_header->sh_offset, UIO_WRITE)) {
+        ZF_LOGE("can't uio_kinit");
+        goto fail;
+    }
+    if (VOP_PREAD(vnode, &myuio, coro) != shrtrtab_header->sh_size) {
+        ZF_LOGE("can't read elf");
+        goto fail;
+    }
+    size_t i = 0;
+    for (Elf32_Shdr *curr = sectionTable; i < numSections; i++, curr++) {
+        if (curr->sh_name + strl >= shrtrtab_header->sh_size)
+            continue;
+        if (strncmp(shrtrtab_data + curr->sh_name, str, strl) == 0) {
+            *result = curr->sh_offset;
+            printf("i found coronavirus cure\n");
+            free(sectionTable);
+            free(shrtrtab_data);
+            return 0;
+        }
+    }
+
+    fail:
+    if (sectionTable) free(sectionTable);
+    if (shrtrtab_data) free(shrtrtab_data);
     return -1;
 }
 
