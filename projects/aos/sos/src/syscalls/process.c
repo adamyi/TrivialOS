@@ -37,7 +37,7 @@ IMPLEMENT_SYSCALL(process_delete, 1) {
         kill_process(check_proc, me);
     } else if (check_proc->state == PROC_BLOCKED) {
         check_proc->state = PROC_TO_BE_KILLED;
-        //
+        wait_for_process_exit(pid, me);
     }
     return return_word(0);
 }

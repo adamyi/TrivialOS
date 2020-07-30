@@ -215,11 +215,9 @@ struct sfp_args {
     coro_t coro;
 };
 
-/* Start the first process, and return true if successful
- *
- * This function will leak memory if the process does not start successfully.
- * TODO: avoid leaking memory once you implement real processes, otherwise a user
- *       can force your OS to run out of memory by creating lots of failed processes.
+static void _delete_process(process_t *proc, coro_t coro);
+
+/* Start process, and return pid if successful
  */
 pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
     sos_stat_t file_stat;
@@ -244,6 +242,8 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
     proc->vspace_ut = alloc_retype(&(proc->vspace), seL4_ARM_PageGlobalDirectoryObject,
                                               seL4_PGDBits);
     if (proc->vspace_ut == NULL) {
+        ZF_LOGE("failed to alloc vspace_ut");
+        _delete_process(proc, coro);
         return -1;
     }
 
@@ -252,6 +252,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
     seL4_Word err = seL4_ARM_ASIDPool_Assign(seL4_CapInitThreadASIDPool, proc->vspace);
     if (err != seL4_NoError) {
         ZF_LOGE("Failed to assign asid pool");
+        _delete_process(proc, coro);
         return -1;
     }
 
@@ -260,6 +261,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
     err = cspace_create_one_level(cspace, &(proc->cspace));
     if (err != CSPACE_NOERROR) {
         ZF_LOGE("Failed to create cspace");
+        _delete_process(proc, coro);
         return -1;
     }
 
@@ -268,6 +270,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
     proc->addrspace = as_create(proc->vspace);
     if (proc->addrspace == NULL) {
         ZF_LOGE("Failed to create addrspace");
+        _delete_process(proc, coro);
         return -1;
     }
 
@@ -277,6 +280,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
                 seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, NULL);
     if (err) {
         ZF_LOGE("Failed to define IPC region");
+        _delete_process(proc, coro);
         return -1;
     }
 
@@ -286,6 +290,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
                                         seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, &(proc->ipc_buffer), coro);
     if (err) {
         ZF_LOGE("Failed to alloc map IPC frame");
+        _delete_process(proc, coro);
         return -1;
     }
 
@@ -296,6 +301,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
     seL4_CPtr user_ep = cspace_alloc_slot(&(proc->cspace));
     if (user_ep == seL4_CapNull) {
         ZF_LOGE("Failed to alloc user ep slot");
+        _delete_process(proc, coro);
         return -1;
     }
 
@@ -304,6 +310,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
     err = cspace_mint(&(proc->cspace), user_ep, cspace, ipc_ep, seL4_AllRights, proc->pid);
     if (err) {
         ZF_LOGE("Failed to mint user ep");
+        _delete_process(proc, coro);
         return -1;
     }
 
@@ -312,6 +319,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
     proc->tcb_ut = alloc_retype(&(proc->tcb), seL4_TCBObject, seL4_TCBBits);
     if (proc->tcb_ut == NULL) {
         ZF_LOGE("Failed to alloc tcb ut");
+        _delete_process(proc, coro);
         return -1;
     }
 
@@ -323,6 +331,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
                              proc->ipc_buffer.cap);
     if (err != seL4_NoError) {
         ZF_LOGE("Unable to configure new TCB");
+        _delete_process(proc, coro);
         return -1;
     }
 
@@ -332,6 +341,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
                                                      seL4_MinSchedContextBits);
     if (proc->sched_context_ut == NULL) {
         ZF_LOGE("Failed to alloc sched context ut");
+        _delete_process(proc, coro);
         return -1;
     }
 
@@ -340,6 +350,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
     err = seL4_SchedControl_Configure(sched_ctrl_start, proc->sched_context, US_IN_MS, US_IN_MS, 0, 0);
     if (err != seL4_NoError) {
         ZF_LOGE("Unable to configure scheduling context");
+        _delete_process(proc, coro);
         return -1;
     }
 
@@ -349,6 +360,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
     proc->kernel_ep = cspace_alloc_slot(cspace);
     if (proc->kernel_ep == seL4_CapNull) {
         ZF_LOGE("Failed to alloc kernel ep slot");
+        _delete_process(proc, coro);
         return -1;
     }
 
@@ -357,6 +369,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
     err = cspace_mint(cspace, proc->kernel_ep, cspace, ipc_ep, seL4_AllRights, proc->pid);
     if (err) {
         ZF_LOGE("Failed to mint user ep");
+        _delete_process(proc, coro);
         return -1;
     }
 
@@ -369,6 +382,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
                                   proc->sched_context, proc->kernel_ep);
     if (err != seL4_NoError) {
         ZF_LOGE("Unable to set scheduling params");
+        _delete_process(proc, coro);
         return -1;
     }
 
@@ -384,6 +398,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
     err = vfs_open(app_name, O_RDONLY, &elf_vnode, coro);
     if (err) {
         ZF_LOGE("can't open file");
+        _delete_process(proc, coro);
         return -1;
     }
 
@@ -391,6 +406,8 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
     frame_ref_t headerframe = alloc_frame(coro);
     if (headerframe == NULL_FRAME) {
         ZF_LOGE("can't allocate frame");
+        vfs_close(elf_vnode, coro);
+        _delete_process(proc, coro);
         return -1;
     }
     pin_frame(headerframe);
@@ -401,6 +418,8 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
         ZF_LOGE("can't uio_kinit");
         unpin_frame(headerframe);
         free_frame(headerframe);
+        vfs_close(elf_vnode, coro);
+        _delete_process(proc, coro);
         return -1;
     }
     int headersize = VOP_READ(elf_vnode, &myuio, coro);
@@ -408,6 +427,8 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
         ZF_LOGE("can't read elf file");
         unpin_frame(headerframe);
         free_frame(headerframe);
+        vfs_close(elf_vnode, coro);
+        _delete_process(proc, coro);
         return -1;
     }
     uio_destroy(&myuio, NULL);
@@ -422,6 +443,8 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
         ZF_LOGE("Invalid elf file");
         unpin_frame(headerframe);
         free_frame(headerframe);
+        vfs_close(elf_vnode, coro);
+        _delete_process(proc, coro);
         return -1;
     }
 
@@ -432,29 +455,35 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
         ZF_LOGE("Failed to set up stack");
         unpin_frame(headerframe);
         free_frame(headerframe);
+        vfs_close(elf_vnode, coro);
+        _delete_process(proc, coro);
         return -1;
     }
 
     vaddr_t heap_start;
 
     printf("aaaaaaaaaaaa\n");
-    /* load the elf image from the cpio file */
+    /* load the elf image from NFS*/
     err = elf_load(cspace, proc->vspace, &elf_file, elf_vnode, proc->addrspace, &heap_start, coro);
     if (err) {
         ZF_LOGE("Failed to load elf image");
         unpin_frame(headerframe);
         free_frame(headerframe);
+        vfs_close(elf_vnode, coro);
+        _delete_process(proc, coro);
         return -1;
     }
 
     unpin_frame(headerframe);
     free_frame(headerframe);
+    vfs_close(elf_vnode, coro);
 
     printf("aaaaaaaaaaaa\n");
     /* set up the heap */
     err = as_define_heap(proc->addrspace, heap_start);
     if (err) {
         ZF_LOGE("Failed to define heap region");
+        _delete_process(proc, coro);
         return -1;
     }
 
@@ -464,6 +493,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
                     seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, NULL, coro);
     if (err != 0) {
         ZF_LOGE("Unable to map IPC buffer for user app");
+        _delete_process(proc, coro);
         return -1;
     }
 
@@ -486,6 +516,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
     if (err != seL4_NoError) {
         // free everything
         ZF_LOGE("Failed to write registers");
+        _delete_process(proc, coro);
         return -1;
     }
     proc->stime = get_time();
@@ -543,43 +574,48 @@ pid_t wait_for_process_exit(pid_t pid, coro_t coro) {
     return (pid_t) retpid;
 }
 
+static void _delete_process(process_t *proc, coro_t coro) {
+
+    rid_remove_id(&proc_rid, proc->pid);
+
+    // this is safe to call if everything is null
+    fdtable_destroy(&(proc->fdt), coro);
+
+    if (proc->addrspace) as_destroy(proc->addrspace, &cspace);
+
+    if (proc->tcb) {
+        cspace_delete(&cspace, proc->tcb);
+        cspace_free_slot(&cspace, proc->tcb);
+    }
+    if (proc->tcb_ut) ut_free(proc->tcb_ut);
+
+    if (proc->vspace) {
+        cspace_delete(&cspace, proc->vspace);
+        cspace_free_slot(&cspace, proc->vspace);
+    }
+    if (proc->vspace_ut) ut_free(proc->vspace_ut);
+
+    if (proc->sched_context) {
+        cspace_delete(&cspace, proc->sched_context);
+        cspace_free_slot(&cspace, proc->sched_context);
+    }
+    if (proc->sched_context_ut) ut_free(proc->sched_context_ut);
+
+    if (proc->kernel_ep) {
+        cspace_delete(&cspace, proc->kernel_ep);
+        cspace_free_slot(&cspace, proc->kernel_ep);
+    }
+
+    if (proc->cspace.root_cnode != seL4_CapNull) cspace_destroy(&(proc->cspace));
+
+    proc->state = PROC_FREE;
+}
+
 void kill_process(process_t *proc, coro_t coro) {
     seL4_TCB_Suspend(proc->tcb);
 
-    printf("fdtable_destroy\n");
+    _delete_process(proc, coro);
 
-    fdtable_destroy(&(proc->fdt), coro);
-
-    printf("as_detroy\n");
-    // as_destroy(proc->addrspace, &cspace);
-
-    printf("tcb\n");
-    printf("b\n");
-    cspace_delete(&cspace, proc->tcb);
-    printf("b\n");
-    cspace_free_slot(&cspace, proc->tcb);
-    printf("b\n");
-    printf("free tcb ut %p\n", proc->tcb_ut);
-    ut_free(proc->tcb_ut);
-
-    printf("vspace\n");
-    cspace_delete(&cspace, proc->vspace);
-    cspace_free_slot(&cspace, proc->vspace);
-    ut_free(proc->vspace_ut);
-
-    printf("schedcontext\n");
-    cspace_delete(&cspace, proc->sched_context);
-    cspace_free_slot(&cspace, proc->sched_context);
-    ut_free(proc->sched_context_ut);
-
-    printf("kernelep\n");
-    cspace_delete(&cspace, proc->kernel_ep);
-    cspace_free_slot(&cspace, proc->kernel_ep);
-
-    printf("cspace\n");
-    cspace_destroy(&(proc->cspace));
-
-    printf("move to old\n");
     pid_t pid = proc->pid;
     oldpids[pid % MAX_PROCS] = pid;
 
