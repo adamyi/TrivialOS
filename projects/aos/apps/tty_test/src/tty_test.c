@@ -55,15 +55,17 @@ int main(void)
 
     int pid = sos_my_id();
 
+    int i = 0;
+
     do {
-        printf("%d:\tHello world, I'm\ttty_test!\n", pid);
+        printf("%d [%d]:Hello world\n", pid, i);
         // thread_block();
         printf("calling sleep\n");
         sleep(1);    // Implement this as a syscall
         printf("slept\n");
-    } while (1);
+    } while (i++ < 6);
 
-    // exit(0);
+    exit(0);
 
     return 0;
 }

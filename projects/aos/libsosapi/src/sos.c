@@ -140,8 +140,10 @@ int sos_process_status(sos_process_t *processes, unsigned max)
 
 pid_t sos_process_wait(pid_t pid)
 {
-    (void) pid;
-    return unimplemented_syscall();
+    seL4_SetMR(0, SYSCALL_NO_PROCESS_WAIT);
+    seL4_SetMR(1, pid);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 2));
+    return seL4_GetMR(0);
 }
 
 void sos_sys_usleep(int msec)

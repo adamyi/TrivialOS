@@ -78,7 +78,7 @@ static void *_handle_syscall_impl(void *args) {
             // die?
             ZF_LOGI("need to die");
             kill_process(proc, coro);
-        } else {
+        } else if (proc->state != PROC_FREE) {
             proc->state = PROC_RUNNING;
         }
     }

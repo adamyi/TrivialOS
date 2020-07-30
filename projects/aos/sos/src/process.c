@@ -37,6 +37,7 @@ void process_init() {
     }
     memset(runprocs, 0, sizeof(runprocs));
     memset(oldpids, 0, sizeof(oldpids));
+    global_exit_blocked = NULL;
 }
 
 process_t *get_process_by_pid(pid_t pid) {
@@ -478,6 +479,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
 
     strncpy(proc->command, app_name, N_NAME);
     proc->command[N_NAME - 1] = '\0';
+    proc->exit_blocked = NULL;
 
     printf("Starting %s at %p\n", app_name, (void *) context.pc);
     err = seL4_TCB_WriteRegisters(proc->tcb, 1, 0, 2, &context);
@@ -511,6 +513,34 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep) {
     };
     resume(c, &args);
     return true;
+}
+
+static void exhaust_runqueue(runqueue_t **queue, pid_t pid) {
+    while (*queue != NULL) {
+        resume((*queue)->coro, pid);
+        runqueue_t *last = *queue;
+        *queue = (*queue)->next;
+        free(last);
+    }
+}
+
+pid_t wait_for_process_exit(pid_t pid, coro_t coro) {
+    runqueue_t **queue;
+    if (pid == -1) {
+        queue = &global_exit_blocked;
+    } else {
+        int bucket = pid % MAX_PROCS;
+        if (oldpids[bucket] == pid) return pid;
+        if (runprocs[bucket].pid != pid) return -1;
+        queue = &(runprocs[bucket].exit_blocked);
+    }
+    runqueue_t *rq = malloc(sizeof(runqueue_t));
+    if (rq == NULL) return -1;
+    rq->coro = coro;
+    rq->next = *queue;
+    *queue = rq;
+    void *retpid = yield(NULL);
+    return (pid_t) retpid;
 }
 
 void kill_process(process_t *proc, coro_t coro) {
@@ -550,7 +580,15 @@ void kill_process(process_t *proc, coro_t coro) {
     cspace_destroy(&(proc->cspace));
 
     printf("move to old\n");
-    oldpids[proc->pid % MAX_PROCS] = proc->pid;
+    pid_t pid = proc->pid;
+    oldpids[pid % MAX_PROCS] = pid;
 
+    // this should fix weird race conditions
+    runqueue_t *proc_exit_blocked = proc->exit_blocked;
+    runqueue_t *lglobal_exit_blocked = global_exit_blocked;
+    global_exit_blocked = NULL;
     memset(proc, 0, sizeof(process_t));
+
+    exhaust_runqueue(&lglobal_exit_blocked, pid);
+    exhaust_runqueue(&proc_exit_blocked, pid);
 }

@@ -36,6 +36,15 @@ typedef struct {
     char      command[N_NAME]; /* Name of exectuable */
 } sos_process_t;
 
+typedef struct runqueue runqueue_t;
+
+struct runqueue {
+    runqueue_t *next;
+    coro_t coro;
+};
+
+runqueue_t *global_exit_blocked;
+
 typedef struct process {
     pid_t pid;
     unsigned stime;
@@ -56,6 +65,8 @@ typedef struct process {
 
     cspace_t cspace;
     addrspace_t *addrspace;
+
+    runqueue_t *exit_blocked;
 
     fdtable_t fdt;
 

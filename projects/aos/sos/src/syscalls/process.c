@@ -60,6 +60,8 @@ IMPLEMENT_SYSCALL(process_status, 2) {
     return return_word(count);
 }
 
-IMPLEMENT_SYSCALL(process_wait, 3) {
-    return return_word(0);
+IMPLEMENT_SYSCALL(process_wait, 1) {
+    pid_t pid = seL4_GetMR(1);
+    pid_t child_pid = wait_for_process_exit(pid, me);
+    return return_word(child_pid);
 }
