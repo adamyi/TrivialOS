@@ -23,12 +23,12 @@ region_t *region_create(vaddr_t vaddr, size_t sz,
     return r;
 }
 
-addrspace_t *as_create(seL4_CPtr vspace) {
+addrspace_t *as_create(seL4_CPtr vspace, coro_t coro) {
     addrspace_t *ret = malloc(sizeof(addrspace_t));
     if (ret == NULL) return NULL;
     bzero(ret, sizeof(addrspace_t));
 
-    ret->pagetable = alloc_frame(NULL);
+    ret->pagetable = alloc_frame(coro);
     pin_frame(ret->pagetable);
     if (ret->pagetable == NULL_FRAME) {
         free(ret);
@@ -41,8 +41,8 @@ addrspace_t *as_create(seL4_CPtr vspace) {
     return ret;
 }
 
-void as_destroy(addrspace_t *as, cspace_t *cspace) {
-    pagetable_destroy(as, cspace);
+void as_destroy(addrspace_t *as, cspace_t *cspace, coro_t coro) {
+    pagetable_destroy(as, cspace, coro);
     free(as);
 }
 

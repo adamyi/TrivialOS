@@ -5,6 +5,7 @@
 #include <cspace/cspace.h>
 #include "../vm/addrspace.h"
 #include "../coroutine/picoro.h"
+#include "../vm/pagetable.h"
 
 enum uio_seg {
     UIO_USERSPACE,
@@ -30,5 +31,5 @@ typedef struct uio {
 } uio_t;
 
 int uio_kinit(uio_t *uio, void *data, size_t size, size_t offset, enum uio_rw rw);
-int uio_uinit(uio_t *uio, vaddr_t data, size_t size, size_t offset, enum uio_rw rw, cspace_t *cspace, addrspace_t *as, coro_t coro);
+int uio_uinit(uio_t *uio, vaddr_t data, size_t size, size_t offset, enum uio_rw rw, cspace_t *cspace, process_t *proc, addrspace_t *as, coro_t coro);
 void uio_destroy(uio_t *uio, cspace_t *cspace);

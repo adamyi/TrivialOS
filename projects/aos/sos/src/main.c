@@ -99,6 +99,7 @@ NORETURN void syscall_loop(seL4_CPtr ep)
             debug_print_fault(message, proc->command);
             seL4_Fault_t fault = seL4_getFault(message);
             handle_vm_fault(&cspace, seL4_Fault_VMFault_get_Addr(fault), seL4_Fault_VMFault_get_FSR(fault), proc, reply, reply_ut);
+            printf("finished handle vm fault\n");
         } else if (label == seL4_Fault_NullFault) {
             /* It's not a fault or an interrupt, it must be an IPC
              * message from tty_test! */

@@ -14,6 +14,7 @@
 #include "../vmem_layout.h"
 #include "pagetable.h"
 #include "../vfs/vfs.h"
+#include "../process.h"
 
 #include <assert.h>
 #include <fcntl.h>
@@ -207,7 +208,7 @@ static inline int pf_getidx() {
     return -1;
 }
 
-static inline void pf_setfree(int pfidx) {
+void pf_setfree(int pfidx) {
     pageused[pfidx >> 3] &= ~(1 << (pfidx & 7));
 }
 
@@ -226,15 +227,35 @@ int page_out(frame_ref_t frame_ref, coro_t coro) {
     cspace_free_slot(frame_table.cspace, frame->pte->cap);
     frame->pte->cap = seL4_CapNull;
 
-    frame->pte->type = PAGED_OUT;
-    frame->pte->frame = pfidx;
+    frame->pte->type = PAGING_OUT;
+
+    // we temporarily reset this to 0
+    // if the process tries to page it in when it's paged out, it writes its
+    // pid to frame and yield.
+    // this way we know who to wake up after we finish paging out for them to
+    // page it in again.
+    // we use pid because we don't have enough bits for a coroutine pointer
+    frame->pte->frame = 0;
 
     uio_t myuio;
 
+    printf("dopageout %p\n", coro);
     uio_kinit(&myuio, frame_data(frame_ref), PAGE_SIZE_4K, pfidx * PAGE_SIZE_4K, UIO_READ);
     if (VOP_PWRITE(pf_vnode, &myuio, coro) != PAGE_SIZE_4K) {
         ZF_LOGE("page_out: VOP_PWRITE not entire page");
         return 1;
+    }
+    printf("donepageout\n");
+
+    frame->pte->type = PAGED_OUT;
+    if (frame->pte->frame) {
+        pid_t pid = frame->pte->frame;
+        frame->pte->frame = pfidx;
+        process_t *proc = get_process_by_pid(pid);
+        printf("paged out pid %d coro %p\n", pid, proc->paging_coro);
+        if (proc && proc->paging_coro) resume(proc->paging_coro, NULL);
+    } else {
+        frame->pte->frame = pfidx;
     }
     
     frame->pin = 0;

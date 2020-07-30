@@ -225,36 +225,58 @@ seL4_Error alloc_map_frame(addrspace_t *as, cspace_t *cspace, seL4_Word vaddr,
     return err;
 }
 
-static inline void unalloc_frame_impl(pte_t *pte, cspace_t *cspace) {
+static inline void unalloc_frame_impl(addrspace_t *as, pte_t *pte, cspace_t *cspace, coro_t coro) {
     if (pte && pte->inuse) {
-        /* unmap our pte */
-        seL4_Error err = seL4_ARM_Page_Unmap(pte->cap);
-        assert(err == seL4_NoError);
+        switch (pte->type) {
+            case IN_MEM:;
+            /* unmap our pte */
+            seL4_Error err = seL4_ARM_Page_Unmap(pte->cap);
+            assert(err == seL4_NoError);
 
-        /* delete the frame cap */
-        err = cspace_delete(cspace, pte->cap);
-        assert(err == seL4_NoError);
+            /* delete the frame cap */
+            err = cspace_delete(cspace, pte->cap);
+            assert(err == seL4_NoError);
 
-        /* mark the slot as free */
-        cspace_free_slot(cspace, pte->cap);
+            /* mark the slot as free */
+            cspace_free_slot(cspace, pte->cap);
 
-        /* free frame */
-        free_frame(pte->frame);
+            /* free frame */
+            free_frame(pte->frame);
+            break;
 
+            case PAGING_OUT:
+            currproc->paging_coro = coro;
+            pte->frame = currproc->pid;
+            printf("paging out yield\n");
+            yield(NULL);
+            printf("paging out resume\n");
+            currproc->paging_coro = NULL;
+            // i think we can directly fallthrough to PAGED_OUT case here
+            // but to be on the safe side, we check everything again :)
+            unalloc_frame_impl(as, pte, cspace, coro);
+            return;
+
+            case PAGED_OUT:
+            pf_setfree(pte->frame);
+            break;
+
+            case SHARED_VM:
+            // TODO
+            break;
+        }
         pte->inuse = false;
-
-        // TODO: decrement page count
+        as->pagecount--;
     }
 }
 
-static void pagetable_destroy_impl(page_table_t *pt, cspace_t *cspace, int level) {
+static void pagetable_destroy_impl(addrspace_t *as, page_table_t *pt, cspace_t *cspace, int level, coro_t coro) {
     for (int i = 0; i < PAGE_TABLE_LEVEL_SIZE; i++) {
         if (level == 0) {
-            unalloc_frame_impl(pt->entries + i, cspace);
+            unalloc_frame_impl(as, pt->entries + i, cspace, coro);
         } else {
             pde_t *entry = (pde_t *) (pt->entries + i);
             if (entry->inuse) {
-                pagetable_destroy_impl(frame_data(entry->frame), cspace, level - 1);
+                pagetable_destroy_impl(as, frame_data(entry->frame), cspace, level - 1, coro);
                 free_frame(entry->frame);
             }
         }
@@ -270,18 +292,18 @@ static void pagetable_destroy_impl(page_table_t *pt, cspace_t *cspace, int level
     }
 }
 
-void pagetable_destroy(addrspace_t *as, cspace_t *cspace) {
-    pagetable_destroy_impl(frame_data(as->pagetable), cspace, PAGE_TABLE_LEVELS - 2);
+void pagetable_destroy(addrspace_t *as, cspace_t *cspace, coro_t coro) {
+    pagetable_destroy_impl(as, frame_data(as->pagetable), cspace, PAGE_TABLE_LEVELS - 2, coro);
     free_frame(as->pagetable);
 }
 
 
-void unalloc_frame(addrspace_t *as, cspace_t *cspace, vaddr_t vaddr) {
+void unalloc_frame(addrspace_t *as, cspace_t *cspace, vaddr_t vaddr, coro_t coro) {
     // give null coro since not create pte
-    unalloc_frame_impl(get_pte(as, vaddr, false, NULL), cspace);
+    unalloc_frame_impl(as, get_pte(as, vaddr, false, NULL), cspace, coro);
 }
 
-void *map_vaddr_to_sos(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, seL4_CPtr *local_cptr, size_t *size, coro_t coro) {
+void *map_vaddr_to_sos(cspace_t *cspace, addrspace_t *as, process_t *proc, vaddr_t vaddr, seL4_CPtr *local_cptr, size_t *size, coro_t coro) {
     vaddr_t vbase = PAGE_ALIGN_4K(vaddr);
     size_t offset = vaddr - vbase;
     pte_t *pte = get_pte(as, vbase, true, coro);
@@ -322,9 +344,10 @@ void *map_vaddr_to_sos(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, seL4_CP
 
     //printf("%d\n", pte->frame);
     switch (pte->type) {
+        case PAGING_OUT:
         case PAGED_OUT:;
         bool tmp;
-        if (!ensure_mapping(cspace, (void *) vaddr, as, coro, &tmp)) {
+        if (!ensure_mapping(cspace, (void *) vaddr, proc, as, coro, &tmp)) {
             ZF_LOGE("Failed ensure_mapping");
             return NULL;
         }
@@ -344,14 +367,14 @@ void unmap_vaddr_from_sos(cspace_t *cspace, seL4_CPtr local_cptr) {
     /* we don't do anything */
 }
 
-int copy_in(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, size_t size, void *dest, coro_t coro) {
+int copy_in(cspace_t *cspace, addrspace_t *as, process_t *proc, vaddr_t vaddr, size_t size, void *dest, coro_t coro) {
     size_t rs;
     seL4_CPtr lc;
     void *src;
     while (size > 0) {
         // we don't need to check overflow because regions are aligned
         // if we overflow, we won't get pte
-        src = map_vaddr_to_sos(cspace, as, vaddr, &lc, &rs, coro);
+        src = map_vaddr_to_sos(cspace, as, proc, vaddr, &lc, &rs, coro);
         //printf("sos addr %p\n", src);
         if (src == NULL) return -1;
         if (size < rs) rs = size;
@@ -364,14 +387,14 @@ int copy_in(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, size_t size, void 
     return 0;
 }
 
-int copy_out(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, size_t size, void *src, coro_t coro) {
+int copy_out(cspace_t *cspace, addrspace_t *as, process_t *proc, vaddr_t vaddr, size_t size, void *src, coro_t coro) {
     size_t rs;
     seL4_CPtr lc;
     void *dest;
     while (size > 0) {
         // we don't need to check overflow because regions are aligned
         // if we overflow, we won't get pte
-        dest = map_vaddr_to_sos(cspace, as, vaddr, &lc, &rs, coro);
+        dest = map_vaddr_to_sos(cspace, as, proc, vaddr, &lc, &rs, coro);
         if (dest == NULL) return -1;
         if (size < rs) rs = size;
         memcpy(dest, src, rs);

@@ -267,7 +267,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
 
     printf("aaaaaaaaaaaa\n");
     /* Create an as */
-    proc->addrspace = as_create(proc->vspace);
+    proc->addrspace = as_create(proc->vspace, coro);
     if (proc->addrspace == NULL) {
         ZF_LOGE("Failed to create addrspace");
         _delete_process(proc, coro);
@@ -437,8 +437,6 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
 
     /* Ensure that the file is an elf file. */
     /* we only check ELF header and program header table without checking section header table */
-    char *fuck = headerbytes;
-    printf("%x %x %x %x\n%d\n", *fuck, *(fuck+1), *(fuck+2), *(fuck+3), headersize);
     if (elf_newFile_maybe_unsafe(headerbytes, headersize, true, false, &elf_file)) {
         ZF_LOGE("Invalid elf file");
         unpin_frame(headerframe);
@@ -464,7 +462,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
 
     printf("aaaaaaaaaaaa\n");
     /* load the elf image from NFS*/
-    err = elf_load(cspace, proc->vspace, &elf_file, elf_vnode, proc->addrspace, &heap_start, coro);
+    err = elf_load(cspace, proc, proc->vspace, &elf_file, elf_vnode, proc->addrspace, &heap_start, coro);
     if (err) {
         ZF_LOGE("Failed to load elf image");
         unpin_frame(headerframe);
@@ -548,11 +546,13 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep) {
 
 static void exhaust_runqueue(runqueue_t **queue, pid_t pid) {
     while (*queue != NULL) {
+        printf("exhaust_runqueue: resume %p", (*queue)->coro);
         resume((*queue)->coro, pid);
         runqueue_t *last = *queue;
         *queue = (*queue)->next;
         free(last);
     }
+    printf("exhaust_runqueue finish\n");
 }
 
 pid_t wait_for_process_exit(pid_t pid, coro_t coro) {
@@ -581,7 +581,9 @@ static void _delete_process(process_t *proc, coro_t coro) {
     // this is safe to call if everything is null
     fdtable_destroy(&(proc->fdt), coro);
 
-    if (proc->addrspace) as_destroy(proc->addrspace, &cspace);
+    printf("before as_destroy\n");
+    if (proc->addrspace) as_destroy(proc->addrspace, &cspace, coro);
+    printf("after as_destroy\n");
 
     if (proc->tcb) {
         cspace_delete(&cspace, proc->tcb);

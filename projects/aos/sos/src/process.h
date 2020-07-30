@@ -45,7 +45,7 @@ struct runqueue {
 
 runqueue_t *global_exit_blocked;
 
-typedef struct process {
+struct process {
     pid_t pid;
     unsigned stime;
     char command[N_NAME];
@@ -68,9 +68,11 @@ typedef struct process {
 
     runqueue_t *exit_blocked;
 
+    coro_t paging_coro;
+
     fdtable_t fdt;
 
-} process_t;
+};
 
 extern process_t *currproc;
 extern process_t oldprocs[];

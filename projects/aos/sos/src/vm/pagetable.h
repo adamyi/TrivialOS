@@ -18,8 +18,11 @@
 #define PTE_BITS (12)
 #define PTE_SIZE ((1)<<(PTE_BITS))
 
+typedef struct process process_t;
+
 typedef enum {
-    IN_MEM = 1,
+    IN_MEM = 0,
+    PAGING_OUT = 1,
     PAGED_OUT = 2,
     SHARED_VM = 3,
 } pte_type_t;
@@ -55,9 +58,9 @@ seL4_Error create_pt(pde_t *entry, coro_t coro);
 pte_t *get_pte(addrspace_t *as, vaddr_t vaddr, bool create, coro_t coro);
 seL4_Error alloc_map_frame(addrspace_t *as, cspace_t *cspace, seL4_Word vaddr,
                     seL4_CapRights_t rights, seL4_ARM_VMAttributes attrs, pte_t *pte, coro_t coro);
-void unalloc_frame(addrspace_t *as, cspace_t *cspace, vaddr_t vaddr);
-void *map_vaddr_to_sos(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, seL4_CPtr *local_cptr, size_t *size, coro_t coro);
+void unalloc_frame(addrspace_t *as, cspace_t *cspace, vaddr_t vaddr, coro_t coro);
+void *map_vaddr_to_sos(cspace_t *cspace, addrspace_t *as, process_t *proc, vaddr_t vaddr, seL4_CPtr *local_cptr, size_t *size, coro_t coro);
 void unmap_vaddr_from_sos(cspace_t *cspace, seL4_CPtr local_cptr);
-int copy_in(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, size_t size, void *dest, coro_t coro);
-int copy_out(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, size_t size, void *src, coro_t coro);
-void pagetable_destroy(addrspace_t *as, cspace_t *cspace);
+int copy_in(cspace_t *cspace, addrspace_t *as, process_t *proc, vaddr_t vaddr, size_t size, void *dest, coro_t coro);
+int copy_out(cspace_t *cspace, addrspace_t *as, process_t *proc, vaddr_t vaddr, size_t size, void *src, coro_t coro);
+void pagetable_destroy(addrspace_t *as, cspace_t *cspace, coro_t coro);

@@ -73,7 +73,7 @@ static inline seL4_CapRights_t get_sel4_rights_from_elf(unsigned long permission
  * @return
  *
  */
-static int load_segment_into_vspace(addrspace_t *as, cspace_t *cspace, seL4_CPtr loadee, vnode_t *vnode, size_t offset, size_t segment_size,
+static int load_segment_into_vspace(addrspace_t *as, cspace_t *cspace, process_t *proc, seL4_CPtr loadee, vnode_t *vnode, size_t offset, size_t segment_size,
                                     size_t file_size, uintptr_t dst, seL4_CapRights_t permissions, seL4_ARM_VMAttributes attr, coro_t coro)
 {
     assert(file_size <= segment_size);
@@ -111,7 +111,7 @@ static int load_segment_into_vspace(addrspace_t *as, cspace_t *cspace, seL4_CPtr
         /* finally copy the data */
         seL4_CPtr lcptr;
         size_t size;
-        unsigned char *loader_data = map_vaddr_to_sos(cspace, as, loadee_vaddr, &lcptr, &size, coro);
+        unsigned char *loader_data = map_vaddr_to_sos(cspace, as, proc, loadee_vaddr, &lcptr, &size, coro);
         *loader_data = 0x88;
 
 
@@ -168,7 +168,7 @@ static int load_segment_into_vspace(addrspace_t *as, cspace_t *cspace, seL4_CPtr
     return 0;
 }
 
-int elf_load(cspace_t *cspace, seL4_CPtr loadee_vspace, elf_t *elf_file, vnode_t *elf_vnode, addrspace_t *as, vaddr_t *end, coro_t coro) {
+int elf_load(cspace_t *cspace, process_t *proc, seL4_CPtr loadee_vspace, elf_t *elf_file, vnode_t *elf_vnode, addrspace_t *as, vaddr_t *end, coro_t coro) {
     *end = 0;
 
     int num_headers = elf_getNumProgramHeaders(elf_file);
@@ -198,7 +198,7 @@ int elf_load(cspace_t *cspace, seL4_CPtr loadee_vspace, elf_t *elf_file, vnode_t
 
         /* Copy it across into the vspace. */
         ZF_LOGD(" * Loading segment %p-->%p\n", (void *) vaddr, (void *)(vaddr + segment_size));
-        err = load_segment_into_vspace(as, cspace, loadee_vspace, elf_vnode, source_offset, segment_size, file_size, vaddr, rights, attr, coro);
+        err = load_segment_into_vspace(as, cspace, proc, loadee_vspace, elf_vnode, source_offset, segment_size, file_size, vaddr, rights, attr, coro);
         if (err) {
             ZF_LOGE("Elf loading failed!");
             return -1;

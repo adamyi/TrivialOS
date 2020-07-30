@@ -19,7 +19,7 @@ IMPLEMENT_SYSCALL(brk, 1) {
     // this is for simplicity reasons
     if (IS_ALIGNED_4K(vaddr) && heap->vbase <= vaddr && vaddr <= heap->next->vbase) {
         for (vaddr_t curr = IS_ALIGNED_4K(vaddr) ? vaddr : PAGE_ALIGN_4K(vaddr) + 1; curr < heap->vbase + heap->memsize; curr += PAGE_SIZE_4K) {
-            unalloc_frame(proc->addrspace, &(proc->cspace), curr);
+            unalloc_frame(proc->addrspace, &(proc->cspace), curr, me);
         }
         heap->memsize = vaddr - heap->vbase;
     }

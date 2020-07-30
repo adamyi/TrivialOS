@@ -18,7 +18,7 @@ IMPLEMENT_SYSCALL(process_create, 2) {
         return return_word(-ENAMETOOLONG);
     }
 
-    int err = copy_in(cspace, proc->addrspace, pathname_ptr, pathlen, pathname, me);
+    int err = copy_in(cspace, proc->addrspace, proc, pathname_ptr, pathlen, pathname, me);
     if (err) return return_word(-EINVAL);
     pathname[pathlen] = '\0';
 
@@ -54,7 +54,7 @@ IMPLEMENT_SYSCALL(process_status, 2) {
     
     sos_process_t *processes = malloc(max * sizeof(sos_process_t));
     int count = get_processes(processes, max);
-    int err = copy_out(cspace, proc->addrspace, dest, count * sizeof(sos_process_t), processes, me);
+    int err = copy_out(cspace, proc->addrspace, proc, dest, count * sizeof(sos_process_t), processes, me);
     free(processes);
     if (err) return return_word(-EINVAL);
     return return_word(count);

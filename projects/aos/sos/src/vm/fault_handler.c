@@ -30,7 +30,7 @@ struct vm_fault_handler_args {
     coro_t coro;
 };
 
-bool ensure_mapping(cspace_t *cspace, void *vaddr, addrspace_t *as, coro_t coro, bool *kill) {
+bool ensure_mapping(cspace_t *cspace, void *vaddr, process_t *proc, addrspace_t *as, coro_t coro, bool *kill) {
     region_t *region;
 
     /* check if it's a stack extension first */
@@ -48,7 +48,7 @@ bool ensure_mapping(cspace_t *cspace, void *vaddr, addrspace_t *as, coro_t coro,
                 ZF_LOGE("%p - %p", region->vbase, region->vbase + region->memsize);
                 region = region->next;
             }
-            ZF_LOGF("VM Fault ...  did you overflow your buffer again?!?");
+            ZF_LOGE("VM Fault ...  did you overflow your buffer again?!?");
             *kill = true;
             return false;
         }
@@ -76,6 +76,15 @@ bool ensure_mapping(cspace_t *cspace, void *vaddr, addrspace_t *as, coro_t coro,
                 return false;
             }
             break;
+            case PAGING_OUT:
+            proc->paging_coro = coro;
+            pte->frame = currproc->pid;
+            printf("paging out coro: %p\n", coro);
+            yield(NULL);
+            proc->paging_coro = NULL;
+            // i think we can directly fallthrough to PAGED_OUT case here
+            // but to be on the safe side, we check everything again :)
+            return ensure_mapping(cspace, vaddr, proc, as, coro, kill);
             case PAGED_OUT:;
             size_t pfidx = pte->frame;
             seL4_Error err = alloc_map_frame(as, cspace, (vaddr_t) vaddr, region->rights, region->attrs, NULL, coro);
@@ -118,7 +127,7 @@ void *_handle_vm_fault_impl(void *args) {
         ZF_LOGE("Permission fault on page");
         kill = true;
     } else {
-        ensure_mapping(cspace, vaddr, curr->addrspace, coro, &kill);
+        ensure_mapping(cspace, vaddr, curr, curr->addrspace, coro, &kill);
     }
 
     if (kill || curr->state == PROC_TO_BE_KILLED) {

@@ -176,4 +176,5 @@ frame_t *frame_from_ref(frame_ref_t frame_ref);
 
 int page_out(frame_ref_t frame_ref, coro_t coro);
 int page_in(frame_ref_t ref, size_t pfidx, coro_t coro);
+void pf_setfree(int pfidx);
 void pager_init(void (*cb)());
