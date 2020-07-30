@@ -48,7 +48,7 @@ pid_t get_next_pid() {
     pid_t ret = rid_get_id(&proc_rid);
     printf("rid_get_id %d\n", ret);
     int count = MAX_PROCS;
-    while (count-- && ret != -1 && runprocs[ret % MAX_PROCS].status != PROC_FREE) {
+    while (count-- && ret != -1 && runprocs[ret % MAX_PROCS].state != PROC_FREE) {
         printf("trivial\n");
         rid_remove_id(&proc_rid, ret);
         ret = rid_get_id(&proc_rid);
@@ -64,9 +64,9 @@ int get_processes(sos_process_t *processes, int max) {
     if (max <= 0) return 0;
     int count = 0;
     for (int i = 0; i < MAX_PROCS; ++i) {
-        if (runprocs[i].status != PROC_FREE) {
+        if (runprocs[i].state != PROC_FREE) {
             processes->pid = runprocs[i].pid;
-            processes->size = runprocs[i].size;
+            processes->size = runprocs[i].addrspace->pagecount;
             processes->stime = runprocs[i].stime / 1000; // time in msec
             strncpy(processes->command, runprocs[i].command, N_NAME);
             processes->command[N_NAME - 1] = '\0';
@@ -479,7 +479,6 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
 
     strncpy(proc->command, app_name, N_NAME);
     proc->command[N_NAME - 1] = '\0';
-    proc->size = 0;
 
     printf("Starting %s at %p\n", app_name, (void *) context.pc);
     err = seL4_TCB_WriteRegisters(proc->tcb, 1, 0, 2, &context);
@@ -489,7 +488,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
         return -1;
     }
     proc->stime = get_time();
-    proc->status = PROC_RUNNING;
+    proc->state = PROC_RUNNING;
     return proc->pid;
 }
 
@@ -513,4 +512,8 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep) {
     };
     resume(c, &args);
     return true;
+}
+
+void kill_process(process_t *proc) {
+    ZF_LOGF("idk how to kill");
 }

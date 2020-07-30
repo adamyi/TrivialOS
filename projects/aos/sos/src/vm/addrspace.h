@@ -27,6 +27,7 @@ typedef struct addrspace {
     struct region *heap;
     frame_ref_t pagetable;
     seL4_CPtr vspace;
+    size_t pagecount;
 } addrspace_t;
 
 addrspace_t *as_create(seL4_CPtr vspace);

@@ -58,8 +58,12 @@ int main(void)
     do {
         printf("%d:\tHello world, I'm\ttty_test!\n", pid);
         // thread_block();
+        printf("calling sleep\n");
         sleep(1);    // Implement this as a syscall
-    } while (1);
+        printf("slept\n");
+    } while (0);
+
+    // exit(0);
 
     return 0;
 }

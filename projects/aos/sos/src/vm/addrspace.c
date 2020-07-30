@@ -36,6 +36,7 @@ addrspace_t *as_create(seL4_CPtr vspace) {
     }
     memset(frame_data(ret->pagetable), 0, PAGE_SIZE_4K);
     ret->vspace = vspace;
+    ret->pagecount = 0;
 
     return ret;
 }

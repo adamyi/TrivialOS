@@ -65,9 +65,7 @@ extern void (__register_frame)(void *);
 /* root tasks cspace */
 cspace_t cspace;
 
-
-
-
+process_t *currproc;
 
 NORETURN void syscall_loop(seL4_CPtr ep)
 {
@@ -88,6 +86,7 @@ NORETURN void syscall_loop(seL4_CPtr ep)
         seL4_Word label = seL4_MessageInfo_get_label(message);
 
         process_t *proc = get_process_by_pid(badge);
+        currproc = proc;
 
         if (badge & IRQ_EP_BADGE) {
             /* It's a notification from our bound notification

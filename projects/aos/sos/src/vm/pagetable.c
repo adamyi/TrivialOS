@@ -196,7 +196,11 @@ pte_t *get_pte(addrspace_t *as, vaddr_t vaddr, bool create, coro_t coro) {
     page_table_t *pdt = get_pt_level(as, vaddr, 1, create, coro);
     if (pdt == NULL) return NULL;
     pte_t *pte = (pte_t *) (pdt->entries + get_vaddr_level_idx(vaddr, 0));
-    if (create || pte->inuse) return pte;
+    if (pte->inuse) return pte;
+    if (create) {
+        as->pagecount++;
+        return pte;
+    }
     return NULL;
 }
 
@@ -309,7 +313,8 @@ void *map_vaddr_to_sos(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, seL4_CP
     //printf("%d\n", pte->frame);
     switch (pte->type) {
         case PAGED_OUT:;
-        if (!ensure_mapping(cspace, (void *) vaddr, as, coro)) {
+        bool tmp;
+        if (!ensure_mapping(cspace, (void *) vaddr, as, coro, &tmp)) {
             ZF_LOGE("Failed ensure_mapping");
             return NULL;
         }

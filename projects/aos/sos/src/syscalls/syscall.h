@@ -41,6 +41,10 @@ static inline seL4_MessageInfo_t return_error() {
     return return_word(-1);
 }
 
+static inline seL4_MessageInfo_t no_return() {
+    return seL4_MessageInfo_new(0, 0, 0, 0);
+}
+
 void handle_syscall(cspace_t *cspace, seL4_Word badge, size_t num_args, seL4_CPtr reply, ut_t *reply_ut, process_t *proc);
 void init_syscall();
 

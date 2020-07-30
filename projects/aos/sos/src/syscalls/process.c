@@ -27,7 +27,18 @@ IMPLEMENT_SYSCALL(process_create, 2) {
     return return_word(pid);
 }
 
-IMPLEMENT_SYSCALL(process_delete, 3) {
+IMPLEMENT_SYSCALL(process_delete, 1) {
+    pid_t pid = seL4_GetMR(1);
+    printf("Killing process %d\n", pid);
+    process_t *check_proc = get_process_by_pid(pid);
+    if (check_proc == NULL) return return_error();
+    if (check_proc == proc || check_proc->state == PROC_RUNNING) {
+        printf("Killing myself\n");
+        kill_process(check_proc);
+    } else if (check_proc->state == PROC_BLOCKED) {
+        check_proc->state = PROC_TO_BE_KILLED;
+        //
+    }
     return return_word(0);
 }
 

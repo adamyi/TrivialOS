@@ -22,8 +22,10 @@
  * process */
 #define INITIAL_PROCESS_EXTRA_STACK_PAGES 4
 
-#define PROC_FREE 0
-#define PROC_RUNNING 1
+#define PROC_FREE         0
+#define PROC_RUNNING      1
+#define PROC_BLOCKED      2
+#define PROC_TO_BE_KILLED 3
 
 typedef int pid_t;
 
@@ -36,10 +38,9 @@ typedef struct {
 
 typedef struct process {
     pid_t pid;
-    unsigned size;
     unsigned stime;
     char command[N_NAME];
-    char status;
+    char state;
 
     ut_t *tcb_ut;
     seL4_CPtr tcb;
@@ -58,6 +59,7 @@ typedef struct process {
 
 } process_t;
 
+extern process_t *currproc;
 extern process_t oldprocs[];
 extern process_t runprocs[];
 
@@ -71,6 +73,8 @@ seL4_CPtr sched_ctrl_start;
 seL4_CPtr sched_ctrl_end;
 
 void process_init();
+
+void kill_process(process_t *proc);
 
 bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep);
 pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro);

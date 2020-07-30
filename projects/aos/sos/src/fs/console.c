@@ -8,6 +8,7 @@
 #include "utils/page.h"
 #include "../coroutine/picoro.h"
 #include <sel4/sel4.h>
+#include "../process.h"
 
 #define CONSOLE_BUFFER_SIZE (PAGE_SIZE_4K)
 

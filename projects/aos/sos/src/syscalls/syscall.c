@@ -48,6 +48,7 @@ static void *_handle_syscall_impl(void *args) {
     cspace_t *cspace = sargs->cspace;
     seL4_CPtr reply = sargs->reply;
     ut_t *reply_ut = sargs->reply_ut;
+    process_t *proc = sargs->proc;
 
     /* get the first word of the message, which in the SOS protocol is the number
      * of the SOS "syscall". */
@@ -62,17 +63,29 @@ static void *_handle_syscall_impl(void *args) {
         reply_msg = return_error();
     } else {
         // ZF_LOGE("Calling syscall %s\n", syscalls[syscall_number]->name);
-        reply_msg = syscalls[syscall_number]->implementation(cspace, sargs->proc, sargs->coro);
+        reply_msg = syscalls[syscall_number]->implementation(cspace, proc, sargs->coro);
     }
-    seL4_Send(reply, reply_msg);
+    // the only syscall that doesn't reply is to kill oneself
+    bool killed = seL4_MessageInfo_get_length(reply_msg) == 0;
+    if (!killed) seL4_Send(reply, reply_msg);
     cspace_delete(cspace, reply);
     cspace_free_slot(cspace, reply);
     ut_free(reply_ut);
     //printf("sent\n");
+    if (!killed) {
+        if (proc->state == PROC_TO_BE_KILLED) {
+            // die?
+            ZF_LOGI("need to die");
+            kill_process(proc);
+        } else {
+            proc->state = PROC_RUNNING;
+        }
+    }
     return NULL;
 }
 
 void handle_syscall(cspace_t *cspace, seL4_Word badge, size_t num_args, seL4_CPtr reply, ut_t *reply_ut, process_t *proc) {
+    proc->state = PROC_BLOCKED;
     coro_t c = coroutine(_handle_syscall_impl);
     struct syscall_args args = {
         .cspace = cspace,

@@ -13,8 +13,8 @@ static inline bool is_perm_fault(seL4_Word fsr) {
     return (fsr & 0b01111) == 0b01111;
 }
 
-static void clean_up(cspace_t *cspace, seL4_CPtr reply, ut_t *reply_ut) {
-    seL4_Send(reply, seL4_MessageInfo_new(0, 0, 0, 0));
+static void clean_up(cspace_t *cspace, seL4_CPtr reply, ut_t *reply_ut, bool sendreply) {
+    if (sendreply) seL4_Send(reply, seL4_MessageInfo_new(0, 0, 0, 0));
     cspace_delete(cspace, reply);
     cspace_free_slot(cspace, reply);
     ut_free(reply_ut);
@@ -24,13 +24,13 @@ struct vm_fault_handler_args {
     cspace_t *cspace;
     void *vaddr;
     seL4_Word type;
-    addrspace_t *as;
+    process_t *curr;
     seL4_CPtr reply;
     ut_t *reply_ut;
     coro_t coro;
 };
 
-bool ensure_mapping(cspace_t *cspace, void *vaddr, addrspace_t *as, coro_t coro) {
+bool ensure_mapping(cspace_t *cspace, void *vaddr, addrspace_t *as, coro_t coro, bool *kill) {
     region_t *region;
 
     /* check if it's a stack extension first */
@@ -49,7 +49,7 @@ bool ensure_mapping(cspace_t *cspace, void *vaddr, addrspace_t *as, coro_t coro)
                 region = region->next;
             }
             ZF_LOGF("VM Fault ...  did you overflow your buffer again?!?");
-            // TODO: kill process
+            *kill = true;
             return false;
         }
     }
@@ -106,33 +106,40 @@ void *_handle_vm_fault_impl(void *args) {
     cspace_t *cspace = vmargs->cspace;
     void *vaddr = vmargs->vaddr;
     seL4_Word type = vmargs->type;
-    addrspace_t *as = vmargs->as;
+    process_t *curr = vmargs->curr;
     seL4_CPtr reply = vmargs->reply;
     ut_t *reply_ut = vmargs->reply_ut;
     coro_t coro = vmargs->coro;
+    bool kill = false;
 
     // printf("tttttttttttt VM Fault Type %lx\n", type);
     /* Check permisison fault on page */
     if (is_perm_fault(type)) {
-        ZF_LOGF("Permission fault on page");
-        // TODO: kill process
-        return NULL;
+        ZF_LOGE("Permission fault on page");
+        kill = true;
+    } else {
+        ensure_mapping(cspace, vaddr, curr->addrspace, coro, &kill);
     }
 
-    ensure_mapping(cspace, vaddr, as, coro);
-
-    clean_up(cspace, reply, reply_ut);
+    if (kill || curr->state == PROC_TO_BE_KILLED) {
+        clean_up(cspace, reply, reply_ut, false);
+        kill_process(curr);
+    } else {
+        clean_up(cspace, reply, reply_ut, true);
+        curr->state = PROC_RUNNING;
+    }
 
     return NULL;
 }
 
 void handle_vm_fault(cspace_t *cspace, void *vaddr, seL4_Word type, process_t *curr, seL4_CPtr reply, ut_t *reply_ut) {
+    curr->state = PROC_BLOCKED;
     coro_t c = coroutine(_handle_vm_fault_impl);
     struct vm_fault_handler_args args = {
         .cspace = cspace,
         .vaddr = vaddr,
         .type = type,
-        .as = curr->addrspace,
+        .curr = curr,
         .reply = reply,
         .reply_ut = reply_ut,
         .coro = c
