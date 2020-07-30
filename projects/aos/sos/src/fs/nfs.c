@@ -60,17 +60,6 @@ static void sos_nfs_cb(int status, UNUSED struct nfs_context *nfs, void *data, v
 }
 
 int sos_nfs_open(vnode_t *object, char *pathname, int flags_from_open, vnode_t **ret, coro_t me) {
-    /* Get file stat */
-    sos_stat_t file_stat;
-    int err = sos_nfs_stat(object, pathname, &file_stat, me);
-    printf("flags_from_open: %x, err %x, stat %x\n", flags_from_open, err, file_stat.st_fmode);
-    if ((err == -1 && (flags_from_open & O_ACCMODE) == O_RDONLY) || // if file doesn't exist and we try to read
-        (err != -1 && (flags_from_open & O_ACCMODE) == O_RDONLY && !(file_stat.st_fmode & FM_READ)) || // read from write-only file
-        (err != -1 && (flags_from_open & O_ACCMODE) == O_WRONLY && !(file_stat.st_fmode & FM_WRITE))|| // write to read-only file
-        (err != -1 && (flags_from_open & O_ACCMODE) == O_RDWR && (file_stat.st_fmode & FM_RDWR) != FM_RDWR)) // read-write
-        return -1;
-
-    /* Open file */
     res_cb_t cb_ret = {
         .coro = me,
         .status = 0,

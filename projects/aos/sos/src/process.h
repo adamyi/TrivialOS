@@ -13,11 +13,34 @@
 #define TTY_PRIORITY         (0)
 #define TTY_EP_BADGE         (101)
 
+#define MAX_PROCS 32
+#define MAX_PID 65535
+
+#define N_NAME 32
+
 /* The number of additional stack pages to provide to the initial
  * process */
 #define INITIAL_PROCESS_EXTRA_STACK_PAGES 4
 
+#define PROC_FREE 0
+#define PROC_RUNNING 1
+
+typedef int pid_t;
+
+typedef struct {
+    pid_t     pid;
+    unsigned  size;            /* in pages */
+    unsigned  stime;           /* start time in msec since booting */
+    char      command[N_NAME]; /* Name of exectuable */
+} sos_process_t;
+
 typedef struct process {
+    pid_t pid;
+    unsigned size;
+    unsigned stime;
+    char command[N_NAME];
+    char status;
+
     ut_t *tcb_ut;
     seL4_CPtr tcb;
     ut_t *vspace_ut;
@@ -31,13 +54,12 @@ typedef struct process {
     cspace_t cspace;
     addrspace_t *addrspace;
 
-    vnode_t *cwd;
     fdtable_t fdt;
 
 } process_t;
 
-/* the one process we start */
-process_t tty_test_process;
+extern process_t oldprocs[];
+extern process_t runprocs[];
 
 /* The linker will link this symbol to the start address  *
  * of an archive of attached applications.                */
@@ -48,5 +70,9 @@ extern char __eh_frame_start[];
 seL4_CPtr sched_ctrl_start;
 seL4_CPtr sched_ctrl_end;
 
-seL4_Word get_new_shared_buffer_vaddr();
+void process_init();
+
 bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep);
+pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro);
+
+process_t *get_process_by_pid(pid_t pid);

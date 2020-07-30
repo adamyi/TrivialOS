@@ -29,7 +29,7 @@ vnode_ops_t root_console_ops = {
                 .vop_pread      = NULL,
                 .vop_pwrite     = NULL,
                 .vop_close      = NULL,
-                .vop_stat       = NULL,
+                .vop_stat       = console_stat,
                 .vop_get_dirent = NULL
 };
 
@@ -168,5 +168,17 @@ int console_close(vnode_t *vnode, coro_t me) {
         has_reader = false;
     }
     free(vnode);
+    return 0;
+}
+
+int console_stat(vnode_t *vnode, char *pathname, sos_stat_t *stat, coro_t me) {
+    (void) vnode;
+    (void) pathname;
+    (void) me;
+    stat->st_type  = ST_SPECIAL;
+    stat->st_fmode = 0666;
+    stat->st_size  = 0;
+    stat->st_ctime = 0;
+    stat->st_atime = 0;
     return 0;
 }

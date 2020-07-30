@@ -27,6 +27,8 @@
 #include <sel4/sel4.h>
 #include <syscalls.h>
 
+#include <sos.h>
+
 #include "ttyout.h"
 
 // Block a thread forever
@@ -51,10 +53,12 @@ int main(void)
     /* initialise communication */
     ttyout_init();
 
+    int pid = sos_my_id();
+
     do {
-        printf("task:\tHello world, I'm\ttty_test!\n");
-        thread_block();
-        // sleep(1);    // Implement this as a syscall
+        printf("%d:\tHello world, I'm\ttty_test!\n", pid);
+        // thread_block();
+        sleep(1);    // Implement this as a syscall
     } while (1);
 
     return 0;

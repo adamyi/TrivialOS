@@ -6,9 +6,19 @@
 
 int fdesc_open(char *filename, int flags, mode_t mode, fdesc_t** result, coro_t me) {
     (void) mode;
+    /* Get file stat */
+    sos_stat_t file_stat;
+    int err = vfs_stat(filename, &file_stat, me);
+    if ((err == -1 && (flags & O_ACCMODE) == O_RDONLY) || // if file doesn't exist and we try to read
+        (err != -1 && (flags & O_ACCMODE) == O_RDONLY && !(file_stat.st_fmode & FM_READ)) || // read from write-only file
+        (err != -1 && (flags & O_ACCMODE) == O_WRONLY && !(file_stat.st_fmode & FM_WRITE))|| // write to read-only file
+        (err != -1 && (flags & O_ACCMODE) == O_RDWR && (file_stat.st_fmode & FM_RDWR) != FM_RDWR)) // read-write
+        return -1;
+
+    /* Open file */
     struct vnode *result_vnode = NULL;
     // int err = vfs_open(filename, flags, mode, &result_vnode);
-    int err = vfs_open(filename, flags, &result_vnode, me);
+    err = vfs_open(filename, flags, &result_vnode, me);
     if (err) return err;
 
     // we do it here before mallocing fdesc to make error handling easier

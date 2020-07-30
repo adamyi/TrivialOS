@@ -21,15 +21,20 @@
 #define SHARED_BUFFER_VADDR            (0xA000001000)
 #define PAGE_SIZE_4K                   (0x1000)
 
-#define SYSCALL_NO_OPEN       (0)
-#define SYSCALL_NO_READ       (1)
-#define SYSCALL_NO_WRITE      (2)
-#define SYSCALL_NO_CLOSE      (3)
-#define SYSCALL_NO_USLEEP     (4)
-#define SYSCALL_NO_TIME_STAMP (5)
-#define SYSCALL_NO_BRK        (6)
-#define SYSCALL_NO_GETDIRENT  (7)
-#define SYSCALL_NO_STAT       (8)
+#define SYSCALL_NO_OPEN           (0)
+#define SYSCALL_NO_READ           (1)
+#define SYSCALL_NO_WRITE          (2)
+#define SYSCALL_NO_CLOSE          (3)
+#define SYSCALL_NO_USLEEP         (4)
+#define SYSCALL_NO_TIME_STAMP     (5)
+#define SYSCALL_NO_BRK            (6)
+#define SYSCALL_NO_GETDIRENT      (7)
+#define SYSCALL_NO_STAT           (8)
+#define SYSCALL_NO_PROCESS_CREATE (9)
+#define SYSCALL_NO_PROCESS_DELETE (10)
+#define SYSCALL_NO_MY_ID          (11)
+#define SYSCALL_NO_PROCESS_STATUS (12)
+#define SYSCALL_NO_PROCESS_WAIT   (13)
 
 #define SYSCALL_NO_UNIMPL     (100)
 
@@ -101,8 +106,11 @@ int sos_stat(const char *path, sos_stat_t *buf)
 
 pid_t sos_process_create(const char *path)
 {
-    (void) path;
-    return unimplemented_syscall();
+    seL4_SetMR(0, SYSCALL_NO_PROCESS_CREATE);
+    seL4_SetMR(1, path);
+    seL4_SetMR(2, strlen(path));
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 3));
+    return seL4_GetMR(0);
 }
 
 int sos_process_delete(pid_t pid)
@@ -113,14 +121,18 @@ int sos_process_delete(pid_t pid)
 
 pid_t sos_my_id(void)
 {
-    return unimplemented_syscall();
+    seL4_SetMR(0, SYSCALL_NO_MY_ID);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 1));
+    return seL4_GetMR(0);
 }
 
 int sos_process_status(sos_process_t *processes, unsigned max)
 {
-    (void) processes;
-    (void) max;
-    return unimplemented_syscall();
+    seL4_SetMR(0, SYSCALL_NO_PROCESS_STATUS);
+    seL4_SetMR(1, processes);
+    seL4_SetMR(2, max);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 3));
+    return seL4_GetMR(0);
 }
 
 pid_t sos_process_wait(pid_t pid)

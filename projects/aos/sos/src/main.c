@@ -87,6 +87,8 @@ NORETURN void syscall_loop(seL4_CPtr ep)
          * see what the message is about */
         seL4_Word label = seL4_MessageInfo_get_label(message);
 
+        process_t *proc = get_process_by_pid(badge);
+
         if (badge & IRQ_EP_BADGE) {
             /* It's a notification from our bound notification
              * object! */
@@ -95,18 +97,18 @@ NORETURN void syscall_loop(seL4_CPtr ep)
             cspace_free_slot(&cspace, reply);
             ut_free(reply_ut);
         } else if (label == seL4_Fault_VMFault) {
-            debug_print_fault(message, "lolololol");
+            debug_print_fault(message, proc->command);
             seL4_Fault_t fault = seL4_getFault(message);
-            handle_vm_fault(&cspace, seL4_Fault_VMFault_get_Addr(fault), seL4_Fault_VMFault_get_FSR(fault), &tty_test_process, reply, reply_ut);
+            handle_vm_fault(&cspace, seL4_Fault_VMFault_get_Addr(fault), seL4_Fault_VMFault_get_FSR(fault), proc, reply, reply_ut);
         } else if (label == seL4_Fault_NullFault) {
             /* It's not a fault or an interrupt, it must be an IPC
              * message from tty_test! */
-            handle_syscall(&cspace, badge, seL4_MessageInfo_get_length(message) - 1, reply, reply_ut, &tty_test_process);
+            handle_syscall(&cspace, badge, seL4_MessageInfo_get_length(message) - 1, reply, reply_ut, proc);
         } else {
             /* some kind of fault */
             debug_print_fault(message, TTY_NAME);
             /* dump registers too */
-            debug_dump_registers(tty_test_process.tcb);
+            debug_dump_registers(proc->tcb);
 
             ZF_LOGF("The SOS skeleton does not know how to handle faults!");
         }
@@ -209,6 +211,8 @@ NORETURN void *main_continued(UNUSED void *arg)
      * sos uses the watchdog timers on this page to implement reset infrastructure & network ticks,
      * so touching the watchdog timers here is not recommended!) */
     void *timer_vaddr = sos_map_device(&cspace, PAGE_ALIGN_4K(TIMER_MAP_BASE), PAGE_SIZE_4K);
+
+    process_init();
 
     /* Initialise the network hardware. */
     printf("Network init\n");
