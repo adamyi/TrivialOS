@@ -123,7 +123,7 @@ void *_handle_vm_fault_impl(void *args) {
 
     if (kill || curr->state == PROC_TO_BE_KILLED) {
         clean_up(cspace, reply, reply_ut, false);
-        kill_process(curr);
+        kill_process(curr, coro);
     } else {
         clean_up(cspace, reply, reply_ut, true);
         curr->state = PROC_RUNNING;

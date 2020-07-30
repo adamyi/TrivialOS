@@ -16,8 +16,10 @@ static int level_to_offset[4] = {PTE_BITS + PAGE_TABLE_LEVEL_BITS * 0,
 static seL4_Word pt_level2type[4] = {seL4_ARM_PageTableObject, seL4_ARM_PageDirectoryObject, seL4_ARM_PageUpperDirectoryObject, seL4_ARM_PageGlobalDirectoryObject};
 //LIBSEL4_INLINE seL4_Error
 // seL4_ARM_PageDirectory_Map(seL4_ARM_PageDirectory _service, seL4_CPtr vspace, seL4_Word vaddr, seL4_ARM_VMAttributes attr)
-typedef seL4_Error (*pt_mapper)(seL4_ARM_PageDirectory, seL4_CPtr, seL4_Word, seL4_ARM_VMAttributes);
+typedef seL4_Error (*pt_mapper)(seL4_CPtr, seL4_CPtr, seL4_Word, seL4_ARM_VMAttributes);
+typedef seL4_Error (*pt_unmapper)(seL4_CPtr);
 static pt_mapper pt_level2mapper[3] = {seL4_ARM_PageTable_Map, seL4_ARM_PageDirectory_Map, seL4_ARM_PageUpperDirectory_Map};
+static pt_unmapper pt_level2unmapper[3] = {seL4_ARM_PageTable_Unmap, seL4_ARM_PageDirectory_Unmap, seL4_ARM_PageUpperDirectory_Unmap};
 
 static inline seL4_Word get_vaddr_level_idx(vaddr_t addr, int level) {
     return (addr >> level_to_offset[level]) & PAGE_TABLE_LEVEL_MASK;
@@ -57,7 +59,6 @@ static inline ut_t *getUt(page_table_t *pt) {
 
 seL4_Error create_pt(pde_t *entry, coro_t coro) {
     frame_ref_t frame = alloc_frame(coro);
-    printf("create_pt %d\n", frame);
     if (frame == NULL_FRAME) {
         ZF_LOGE("Couldn't allocate additional stack frame");
         return seL4_NotEnoughMemory;
@@ -139,6 +140,8 @@ static seL4_Error map_frame_impl(addrspace_t *as, cspace_t *cspace, seL4_CPtr fr
             } else {
                 setUt(pt, ut);
                 setCap(pt, slot);
+                assert(getUt(pt) == ut);
+                assert(getCap(pt) == slot);
                 /* Try the mapping again */
                 err = seL4_ARM_Page_Map(frame_cap, as->vspace, vaddr, rights, attr);
             }
@@ -239,6 +242,8 @@ static inline void unalloc_frame_impl(pte_t *pte, cspace_t *cspace) {
         free_frame(pte->frame);
 
         pte->inuse = false;
+
+        // TODO: decrement page count
     }
 }
 
@@ -248,20 +253,25 @@ static void pagetable_destroy_impl(page_table_t *pt, cspace_t *cspace, int level
             unalloc_frame_impl(pt->entries + i, cspace);
         } else {
             pde_t *entry = (pde_t *) (pt->entries + i);
-            pagetable_destroy_impl(frame_data(entry->frame), cspace, level - 1);
-            free_frame(entry->frame);
+            if (entry->inuse) {
+                pagetable_destroy_impl(frame_data(entry->frame), cspace, level - 1);
+                free_frame(entry->frame);
+            }
         }
     }
     seL4_CPtr cap = getCap(pt);
-    ut_t *ut = getUt(pt);
-    seL4_Error err = cspace_delete(cspace, cap);
-    assert(err == seL4_NoError);
-    cspace_free_slot(cspace, cap);
-    ut_free(ut);
+    if (cap != seL4_CapNull) {
+        pt_level2unmapper[level](cap);
+        ut_t *ut = getUt(pt);
+        seL4_Error err = cspace_delete(cspace, cap);
+        assert(err == seL4_NoError);
+        cspace_free_slot(cspace, cap);
+        ut_free(ut);
+    }
 }
 
 void pagetable_destroy(addrspace_t *as, cspace_t *cspace) {
-    pagetable_destroy_impl(frame_data(as->pagetable), cspace, PAGE_TABLE_LEVELS - 1);
+    pagetable_destroy_impl(frame_data(as->pagetable), cspace, PAGE_TABLE_LEVELS - 2);
     free_frame(as->pagetable);
 }
 

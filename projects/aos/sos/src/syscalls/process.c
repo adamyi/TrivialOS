@@ -34,7 +34,7 @@ IMPLEMENT_SYSCALL(process_delete, 1) {
     if (check_proc == NULL) return return_error();
     if (check_proc == proc || check_proc->state == PROC_RUNNING) {
         printf("Killing myself\n");
-        kill_process(check_proc);
+        kill_process(check_proc, me);
     } else if (check_proc->state == PROC_BLOCKED) {
         check_proc->state = PROC_TO_BE_KILLED;
         //

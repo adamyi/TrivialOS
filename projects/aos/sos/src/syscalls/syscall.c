@@ -49,6 +49,7 @@ static void *_handle_syscall_impl(void *args) {
     seL4_CPtr reply = sargs->reply;
     ut_t *reply_ut = sargs->reply_ut;
     process_t *proc = sargs->proc;
+    coro_t coro = sargs->coro;
 
     /* get the first word of the message, which in the SOS protocol is the number
      * of the SOS "syscall". */
@@ -63,7 +64,7 @@ static void *_handle_syscall_impl(void *args) {
         reply_msg = return_error();
     } else {
         // ZF_LOGE("Calling syscall %s\n", syscalls[syscall_number]->name);
-        reply_msg = syscalls[syscall_number]->implementation(cspace, proc, sargs->coro);
+        reply_msg = syscalls[syscall_number]->implementation(cspace, proc, coro);
     }
     // the only syscall that doesn't reply is to kill oneself
     bool killed = seL4_MessageInfo_get_length(reply_msg) == 0;
@@ -76,7 +77,7 @@ static void *_handle_syscall_impl(void *args) {
         if (proc->state == PROC_TO_BE_KILLED) {
             // die?
             ZF_LOGI("need to die");
-            kill_process(proc);
+            kill_process(proc, coro);
         } else {
             proc->state = PROC_RUNNING;
         }

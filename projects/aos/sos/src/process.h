@@ -52,6 +52,8 @@ typedef struct process {
     ut_t *sched_context_ut;
     seL4_CPtr sched_context;
 
+    seL4_CPtr kernel_ep;
+
     cspace_t cspace;
     addrspace_t *addrspace;
 
@@ -74,7 +76,7 @@ seL4_CPtr sched_ctrl_end;
 
 void process_init();
 
-void kill_process(process_t *proc);
+void kill_process(process_t *proc, coro_t coro);
 
 bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep);
 pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro);

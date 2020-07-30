@@ -61,7 +61,7 @@ int main(void)
         printf("calling sleep\n");
         sleep(1);    // Implement this as a syscall
         printf("slept\n");
-    } while (0);
+    } while (1);
 
     // exit(0);
 

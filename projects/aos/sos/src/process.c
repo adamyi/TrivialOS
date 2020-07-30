@@ -14,6 +14,7 @@
 #include "mapping.h"
 #include "threads.h"
 #include "ut.h"
+#include "utils.h"
 #include "vfs/file.h"
 #include "vm/pagetable.h"
 #include "utils/rolling_id.h"
@@ -24,7 +25,7 @@
  * new pid allocation would cause a hash collision, we just don't
  * use that pid.
  */
-process_t oldprocs[MAX_PROCS];
+pid_t oldpids[MAX_PROCS];
 process_t runprocs[MAX_PROCS];
 static rid_t proc_rid;
 
@@ -35,7 +36,7 @@ void process_init() {
         ZF_LOGF("can't init pid");
     }
     memset(runprocs, 0, sizeof(runprocs));
-    memset(oldprocs, 0, sizeof(oldprocs));
+    memset(oldpids, 0, sizeof(oldpids));
 }
 
 process_t *get_process_by_pid(pid_t pid) {
@@ -230,7 +231,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
         return -1;
     }
     printf("aaaaaaaaaaaa\n");
-    /* Create a VSpace */
+
     pid_t pid = get_next_pid();
     printf("get_next_pid: %d\n", pid);
     if (pid == -1) return -1;
@@ -238,6 +239,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
     process_t *proc = runprocs + (pid % MAX_PROCS);
     proc->pid = pid;
 
+    /* Create a VSpace */
     proc->vspace_ut = alloc_retype(&(proc->vspace), seL4_ARM_PageGlobalDirectoryObject,
                                               seL4_PGDBits);
     if (proc->vspace_ut == NULL) {
@@ -343,15 +345,15 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
     /* allocate a new slot in the kernel cspace which we will mint a badged endpoint cap into --
      * the badge is used to identify the process, which will come in handy when you have multiple
      * processes. */
-    seL4_CPtr kernel_ep = cspace_alloc_slot(cspace);
-    if (kernel_ep == seL4_CapNull) {
+    proc->kernel_ep = cspace_alloc_slot(cspace);
+    if (proc->kernel_ep == seL4_CapNull) {
         ZF_LOGE("Failed to alloc kernel ep slot");
         return -1;
     }
 
     printf("aaaaaaaaaaaa\n");
     /* now mutate the cap, thereby setting the badge */
-    err = cspace_mint(cspace, kernel_ep, cspace, ipc_ep, seL4_AllRights, proc->pid);
+    err = cspace_mint(cspace, proc->kernel_ep, cspace, ipc_ep, seL4_AllRights, proc->pid);
     if (err) {
         ZF_LOGE("Failed to mint user ep");
         return -1;
@@ -363,13 +365,11 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
      * NOTE this will use the unbadged ep unlike above, you might want to mint it with a badge
      * so you can identify which thread faulted in your fault handler */
     err = seL4_TCB_SetSchedParams(proc->tcb, seL4_CapInitThreadTCB, seL4_MinPrio, TTY_PRIORITY,
-                                  proc->sched_context, kernel_ep);
+                                  proc->sched_context, proc->kernel_ep);
     if (err != seL4_NoError) {
         ZF_LOGE("Unable to set scheduling params");
         return -1;
     }
-
-    // TODO: mint
 
     printf("aaaaaaaaaaaa\n");
     /* Provide a name for the thread -- Helpful for debugging */
@@ -381,7 +381,6 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
 
     vnode_t *elf_vnode;
     err = vfs_open(app_name, O_RDONLY, &elf_vnode, coro);
-    // TODO: check exec permission
     if (err) {
         ZF_LOGE("can't open file");
         return -1;
@@ -514,6 +513,44 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep) {
     return true;
 }
 
-void kill_process(process_t *proc) {
-    ZF_LOGF("idk how to kill");
+void kill_process(process_t *proc, coro_t coro) {
+    seL4_TCB_Suspend(proc->tcb);
+
+    printf("fdtable_destroy\n");
+
+    fdtable_destroy(&(proc->fdt), coro);
+
+    printf("as_detroy\n");
+    // as_destroy(proc->addrspace, &cspace);
+
+    printf("tcb\n");
+    printf("b\n");
+    cspace_delete(&cspace, proc->tcb);
+    printf("b\n");
+    cspace_free_slot(&cspace, proc->tcb);
+    printf("b\n");
+    printf("free tcb ut %p\n", proc->tcb_ut);
+    ut_free(proc->tcb_ut);
+
+    printf("vspace\n");
+    cspace_delete(&cspace, proc->vspace);
+    cspace_free_slot(&cspace, proc->vspace);
+    ut_free(proc->vspace_ut);
+
+    printf("schedcontext\n");
+    cspace_delete(&cspace, proc->sched_context);
+    cspace_free_slot(&cspace, proc->sched_context);
+    ut_free(proc->sched_context_ut);
+
+    printf("kernelep\n");
+    cspace_delete(&cspace, proc->kernel_ep);
+    cspace_free_slot(&cspace, proc->kernel_ep);
+
+    printf("cspace\n");
+    cspace_destroy(&(proc->cspace));
+
+    printf("move to old\n");
+    oldpids[proc->pid % MAX_PROCS] = proc->pid;
+
+    memset(proc, 0, sizeof(process_t));
 }

@@ -25,21 +25,21 @@ typedef enum {
 } pte_type_t;
 
 PACKED struct pde {
+    seL4_Word reserved : 16;
     frame_ref_t frame : 20;
     seL4_Word free : 27;
     bool inuse : 1;
-    seL4_Word reserved : 16;
 };
 
 compile_time_assert("PDE Size", 8 == sizeof(pde_t));
 
 PACKED struct pte {
+    seL4_Word reserved : 16;
     frame_ref_t frame : 20;
     seL4_ARM_Page cap : 20;
     pte_type_t type: 2;
     seL4_Word free : 5;
     bool inuse : 1;
-    seL4_Word reserved : 16;
 };
 
 compile_time_assert("PTE Size", 8 == sizeof(pte_t));
