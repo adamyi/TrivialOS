@@ -46,12 +46,69 @@ static void thread_block(void)
     /* Currently SOS does not reply -- so we never come back here */
 }
 
+#include <utils/page.h>
+
+#define NPAGES 250
+#define TEST_ADDRESS 0x8000000000
+
+/* called from pt_test */
+static void
+do_pt_test(char *buf)
+{
+    int i;
+
+    /* set */
+    for (int i = 0; i < NPAGES; i++) {
+      buf[i * PAGE_SIZE_4K] = i;
+    }
+
+    /* check */
+    for (int i = 0; i < NPAGES; i++) {
+      assert(buf[i * PAGE_SIZE_4K] == i);
+    }
+}
+
+static void
+pt_test( void )
+{
+#if 0
+    /* need a decent sized stack */
+    char buf1[NPAGES * PAGE_SIZE_4K], *buf2 = NULL;
+
+    /* check the stack is above phys mem */
+    assert((void *) buf1 > (void *) TEST_ADDRESS);
+
+    /* stack test */
+    do_pt_test(buf1);
+#endif 
+
+    /* heap test */
+    char *buf2 = malloc(NPAGES * PAGE_SIZE_4K);
+    assert(buf2);
+    do_pt_test(buf2);
+    free(buf2);
+    char *buf3 = malloc(NPAGES * PAGE_SIZE_4K);
+    char *buf4 = malloc(NPAGES * PAGE_SIZE_4K);
+    char *buf5 = malloc(NPAGES * PAGE_SIZE_4K);
+    assert(buf3);
+    assert(buf4);
+    assert(buf5);
+    do_pt_test(buf3);
+    do_pt_test(buf4);
+    do_pt_test(buf5);
+    free(buf4);
+    free(buf3);
+    free(buf5);
+}
+
 int main(void)
 {
     sosapi_init_syscall_table();
 
     /* initialise communication */
     ttyout_init();
+
+    pt_test();
 
     int pid = sos_my_id();
 

@@ -35,6 +35,8 @@
 #define SYSCALL_NO_MY_ID          (11)
 #define SYSCALL_NO_PROCESS_STATUS (12)
 #define SYSCALL_NO_PROCESS_WAIT   (13)
+#define SYSCALL_NO_MMAP           (14)
+#define SYSCALL_NO_MUNMAP         (15)
 
 #define SYSCALL_NO_UNIMPL     (100)
 
@@ -164,5 +166,24 @@ long sos_sys_brk(uintptr_t newbrk) {
     seL4_SetMR(0, SYSCALL_NO_BRK);
     seL4_SetMR(1, newbrk);
     seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 2));
+    return seL4_GetMR(0);
+}
+
+long sos_sys_mmap(uintptr_t vaddr, size_t len, int prot) {
+    seL4_SetMR(0, SYSCALL_NO_MMAP);
+    seL4_SetMR(1, vaddr);
+    seL4_SetMR(2, len);
+    seL4_SetMR(3, prot);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 4));
+    long res = seL4_GetMR(0);
+    printf("loooooooooooolllllll %p\n", res);
+    return seL4_GetMR(0);
+}
+
+long sos_sys_munmap(uintptr_t vaddr, size_t len) {
+    seL4_SetMR(0, SYSCALL_NO_MUNMAP);
+    seL4_SetMR(1, vaddr);
+    seL4_SetMR(2, len);
+    seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 3));
     return seL4_GetMR(0);
 }

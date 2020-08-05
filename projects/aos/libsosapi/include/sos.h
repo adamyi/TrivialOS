@@ -133,6 +133,14 @@ long sos_sys_brk(uintptr_t newbrk);
 /* Trivial
  */
 
+long sos_sys_mmap(uintptr_t vaddr, size_t len, int prot);
+/* Trivial
+ */
+
+long sos_sys_munmap(uintptr_t vaddr, size_t len);
+/* Trivial
+ */
+
 
 /*************************************************************************/
 /*                                   */

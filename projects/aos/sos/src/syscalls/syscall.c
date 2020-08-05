@@ -8,7 +8,7 @@
 #include "memory.h"
 #include "process.h"
 
-#define SYSCALL_NUM (14)
+#define SYSCALL_NUM (16)
 
 static syscall_t *syscalls[SYSCALL_NUM];
 
@@ -30,6 +30,8 @@ void init_syscall() {
     INSTALL_SYSCALL(my_id);
     INSTALL_SYSCALL(process_status);
     INSTALL_SYSCALL(process_wait);
+    INSTALL_SYSCALL(mmap);
+    INSTALL_SYSCALL(munmap);
     // did you change SYSCALL_NUM?
 }
 

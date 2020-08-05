@@ -60,6 +60,7 @@ int as_define_heap(struct addrspace *as, vaddr_t start) {
 
 int as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
         seL4_CapRights_t rights, seL4_ARM_VMAttributes attrs, region_t **ret) {
+    printf("as_define_regine: %p-%p\n", vaddr, vaddr+sz);
     region_t **curr = &(as->regions);
     while (*curr != NULL) {
         if (((*curr)->vbase + (*curr)->memsize) > vaddr) break;
@@ -74,11 +75,48 @@ int as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
         return -ENOMEM;
 
     new_region->next = *curr;
-    if (*curr != NULL) {
-        new_region->prev = (*curr)->prev;
-        (*curr)->prev = new_region;
-    }
+    /* :bigbrain: */
+    if (as->regions) new_region->prev = (void *)curr - (void *)&(((region_t *)NULL)->next);
+    if (*curr != NULL) (*curr)->prev = new_region;
     *curr = new_region;
     if (ret != NULL) *ret = new_region;
     return 0;
+}
+
+void as_destroy_region(struct addrspace *as, cspace_t *cspace, region_t *reg, bool unallocate, coro_t me) {
+    printf("as_destroy_region: %p-%p\n", reg->vbase, reg->vbase + reg->memsize);
+    if (reg->prev) reg->prev->next = reg->next;
+    else as->regions = as->regions->next;
+    if (reg->next) reg->next->prev = reg->prev;
+    printf("reg %p reg->prev %p reg->next %p", reg, reg->prev, reg->next);
+    if (reg->prev) printf(" reg->prev->next %p", reg->prev->next);
+    if (reg->next) printf(" reg->next->prev %p", reg->next->prev);
+    printf("\n");
+    
+    if (unallocate) {
+        for (vaddr_t curr = reg->vbase; curr < VEND(reg); curr += PAGE_SIZE_4K) {
+            unalloc_frame(as, cspace, curr, me);
+        }
+    }
+    free(reg);
+}
+
+void as_shrink_region(struct addrspace *as, cspace_t *cspace, region_t *reg, vaddr_t vaddr, size_t sz, bool unallocate, coro_t me) {
+    printf("as_shrink_region: [%p-%p] -> [%p-%p]\n", reg->vbase, reg->vbase + reg->memsize, vaddr, sz);
+    assert(vaddr >= reg->vbase);
+    assert(vaddr + sz <= reg->vbase + reg->memsize);
+    if (sz == 0) {
+        as_destroy_region(as, cspace, reg, unallocate, me);
+        return;
+    }
+    if (unallocate) {
+        for (vaddr_t curr = reg->vbase; curr < vaddr; curr += PAGE_SIZE_4K) {
+            unalloc_frame(as, cspace, curr, me);
+        }
+        for (vaddr_t curr = vaddr + sz; curr < reg->vbase + reg->memsize; curr += PAGE_SIZE_4K) {
+            unalloc_frame(as, cspace, curr, me);
+        }
+    }
+    reg->vbase = vaddr;
+    reg->memsize = sz;
 }

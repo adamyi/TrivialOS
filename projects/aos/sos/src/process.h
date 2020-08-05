@@ -13,7 +13,7 @@
 #define TTY_PRIORITY         (0)
 #define TTY_EP_BADGE         (101)
 
-#define MAX_PROCS 32
+#define MAX_PROCS 20
 #define MAX_PID 65535
 
 #define N_NAME 32

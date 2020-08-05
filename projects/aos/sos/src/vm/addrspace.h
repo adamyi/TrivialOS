@@ -37,6 +37,8 @@ int as_define_stack(struct addrspace *as, vaddr_t bottom, size_t sz);
 int as_define_heap(struct addrspace *as, vaddr_t start);
 int as_define_region(struct addrspace *as, vaddr_t vaddr, size_t sz,
         seL4_CapRights_t rights, seL4_ARM_VMAttributes attrs, region_t **ret);
+void as_destroy_region(struct addrspace *as, cspace_t *cspace, region_t *reg, bool unallocate, coro_t me);
+void as_shrink_region(struct addrspace *as, cspace_t *cspace, region_t *reg, vaddr_t vaddr, size_t sz, bool unallocate, coro_t me);
 
 static inline region_t *get_last_region(region_t *rg, vaddr_t vaddr) {
     region_t *lst = NULL;

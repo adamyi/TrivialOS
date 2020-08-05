@@ -47,19 +47,13 @@ process_t *get_process_by_pid(pid_t pid) {
 }
 
 pid_t get_next_pid() {
-    pid_t ret = rid_get_id(&proc_rid);
-    printf("rid_get_id %d\n", ret);
-    int count = MAX_PROCS;
-    while (count-- && ret != -1 && runprocs[ret % MAX_PROCS].state != PROC_FREE) {
-        printf("trivial\n");
+    for (int i = 0; i < MAX_PROCS; i++) {
+        pid_t ret = rid_get_id(&proc_rid);
+        if (ret == -1) return -1;
+        if (runprocs[ret % MAX_PROCS].state == PROC_FREE) return ret;
         rid_remove_id(&proc_rid, ret);
-        ret = rid_get_id(&proc_rid);
     }
-    if (count == 0) {
-        if (ret != -1) rid_remove_id(&proc_rid, ret);
-        return -1;
-    }
-    return ret;
+    return -1;
 }
 
 int get_processes(sos_process_t *processes, int max) {
