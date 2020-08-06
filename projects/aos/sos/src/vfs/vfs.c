@@ -7,16 +7,26 @@
 static list_t *device_list = NULL;
 static vnode_t *rootfs = NULL;
 
+void fuck() {
+    printf("device_list %p\n", device_list);
+}
+
 void register_device(char *device, vnode_t *vn) {
+    printf("device_list %p\n", device_list);
     if (device_list == NULL) {
         device_list = malloc(sizeof(list_t));
         device_list->head = NULL;
     }
+    if (device_list == NULL) ZF_LOGF("can't malloc device_list");
     device_vnode_t *n = malloc(sizeof(device_vnode_t));
+    if (n == NULL) ZF_LOGF("can't malloc device_vnode");
     //n->name = malloc(strlen(device) + 1);
     //memcpy(n->name, device, strlen(device) + 1);
     n->name = device;
     n->vn = vn;
+    printf("device_list->head %p\n", device_list->head);
+    if (device_list->head) 
+    printf("device_list->head->next %p\n", device_list->head->next);
     list_append(device_list, n);
 }
 

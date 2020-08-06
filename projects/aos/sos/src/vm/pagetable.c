@@ -91,7 +91,7 @@ static seL4_Error retype_pt(cspace_t *cspace, seL4_CPtr vspace, seL4_Word vaddr,
     return pt_level2mapper[level](empty, vspace, vaddr, seL4_ARM_Default_VMAttributes);
 }
 
-static seL4_Error map_frame_impl(addrspace_t *as, cspace_t *cspace, seL4_CPtr frame_cap, frame_ref_t frame_ref, seL4_Word vaddr,
+static seL4_Error map_frame_impl(addrspace_t *as, cspace_t *cspace, seL4_CPtr frame_cap, seL4_Word vaddr,
                                  seL4_CapRights_t rights, seL4_ARM_VMAttributes attr, pte_t *ret, coro_t coro) {
     // ZF_LOGE("Mapping %p (frame %d)", vaddr, frame_ref);
     /* Attempt the mapping */
@@ -148,21 +148,6 @@ static seL4_Error map_frame_impl(addrspace_t *as, cspace_t *cspace, seL4_CPtr fr
         }
     }
 
-    if (!err) {
-        /* Create PTE */
-        pte_t *pte = get_pte(as, vaddr, true, coro);
-        if (pte == NULL) {
-            err = seL4_NotEnoughMemory;
-        } else {
-            pte->cap = frame_cap;
-            pte->frame = frame_ref;
-            pte->inuse = true;
-            pte->type = IN_MEM;
-            set_frame_pte(frame_ref, pte);
-        }
-        if (ret != NULL) *ret = *pte;
-    }
-
     return err;
 }
 
@@ -184,13 +169,27 @@ seL4_Error sos_map_frame(addrspace_t *as, cspace_t *cspace, frame_ref_t frame_re
         return err;
     }
 
-    err = map_frame_impl(as, cspace, frame_cptr, frame_ref, vaddr, rights, attr, ret, coro);
+    /* map frame */
+    err = map_frame_impl(as, cspace, frame_cptr, vaddr, rights, attr, ret, coro);
     if (err != 0) {
         cspace_delete(cspace, frame_cptr);
         cspace_free_slot(cspace, frame_cptr);
         ZF_LOGE("Unable to map extra stack frame for user app");
         return err;
     }
+
+    /* Create PTE */
+    pte_t *pte = get_pte(as, vaddr, true, coro);
+    if (pte == NULL) {
+        return seL4_NotEnoughMemory;
+    } else {
+        pte->cap = frame_cptr;
+        pte->frame = frame_ref;
+        pte->inuse = true;
+        pte->type = IN_MEM;
+        set_frame_pte(frame_ref, pte);
+    }
+    if (ret != NULL) *ret = *pte;
 
     return seL4_NoError;
 }
@@ -403,4 +402,96 @@ int copy_out(cspace_t *cspace, addrspace_t *as, process_t *proc, vaddr_t vaddr, 
         unmap_vaddr_from_sos(cspace, lc);
     }
     return 0;
+}
+
+static int devicecount = 0;
+
+seL4_Error app_map_device(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, pte_t *pte, coro_t coro) {
+    return map_frame_impl(as, cspace, pte->frame, vaddr, seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, NULL, coro);
+}
+
+seL4_Error app_alloc_map_device(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, uintptr_t addr, coro_t coro) {
+    assert(cspace != NULL);
+
+    ut_t *ut = ut_alloc_4k_device(addr);
+    if (ut == NULL) {
+        ZF_LOGE("Failed to find ut for phys address %p", (void *) addr);
+        return seL4_NotEnoughMemory;
+    }
+
+    /* allocate a slot to retype into */
+    seL4_CPtr frame = cspace_alloc_slot(cspace);
+    if (frame == seL4_CapNull) {
+        ZF_LOGE("Out of caps");
+        return seL4_NotEnoughMemory;
+    }
+
+    /* retype */
+    seL4_Error err = cspace_untyped_retype(cspace, ut->cap, frame, seL4_ARM_SmallPageObject,
+            seL4_PageBits);
+    if (err != seL4_NoError) {
+        ZF_LOGE("Failed to retype %lx", (seL4_CPtr)ut->cap);
+        cspace_free_slot(cspace, frame);
+        return seL4_NotEnoughMemory;
+    }
+
+    /* map */
+    err = map_frame_impl(as, cspace, frame, vaddr, seL4_AllRights, 0, NULL, coro);
+    if (err != seL4_NoError) {
+        ZF_LOGE("Failed to map device frame at %p", vaddr);
+        cspace_delete(cspace, frame);
+        cspace_free_slot(cspace, frame);
+        return seL4_NotEnoughMemory;
+    }
+
+    /* Create PTE */
+    pte_t *pte = get_pte(as, vaddr, true, coro);
+    if (pte == NULL) {
+        return seL4_NotEnoughMemory;
+    } else {
+        pte->cap = frame;
+        pte->inuse = true;
+        pte->type = DEVICE;
+    }
+
+    return seL4_NoError;
+
+}
+
+seL4_Error sos_clone_and_map_device_frame(addrspace_t *as, cspace_t *cspace, seL4_CPtr device_cap, seL4_Word vaddr, coro_t coro) {
+    /* allocate a slot to duplicate the frame cap so we can map it into the application */
+    seL4_CPtr frame_cptr = cspace_alloc_slot(cspace);
+    if (frame_cptr == seL4_CapNull) {
+        ZF_LOGE("Failed to alloc slot for frame");
+        return seL4_NotEnoughMemory;
+    }
+
+    /* copy the frame cap into the slot */
+    int err = cspace_copy(cspace, frame_cptr, cspace, device_cap, seL4_AllRights);
+    if (err != seL4_NoError) {
+        cspace_free_slot(cspace, frame_cptr);
+        ZF_LOGE("Failed to copy cap");
+        return err;
+    }
+
+    /* map frame */
+    err = map_frame_impl(as, cspace, frame_cptr, vaddr, seL4_AllRights, 0, NULL, coro);
+    if (err != 0) {
+        cspace_delete(cspace, frame_cptr);
+        cspace_free_slot(cspace, frame_cptr);
+        ZF_LOGE("Unable to map frame for user app");
+        return err;
+    }
+
+    /* Create PTE */
+    pte_t *pte = get_pte(as, vaddr, true, coro);
+    if (pte == NULL) {
+        return seL4_NotEnoughMemory;
+    } else {
+        pte->cap = frame_cptr;
+        pte->inuse = true;
+        pte->type = DEVICE;
+    }
+
+    return seL4_NoError;
 }

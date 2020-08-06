@@ -1,5 +1,5 @@
 #
-# Copyright 2019, Data61
+# Copyright 2019, Data61, 2020 Adam & Eric
 # Commonwealth Scientific and Industrial Research Organisation (CSIRO)
 # ABN 41 687 119 230.
 #
@@ -11,15 +11,15 @@
 #
 cmake_minimum_required(VERSION 3.7.2)
 
-project(tty_test C)
+project(clock_driver C)
 
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -u __vsyscall_ptr")
 
-add_executable(tty_test EXCLUDE_FROM_ALL src/tty_test.c)
-target_include_directories(tty_test PRIVATE include)
-target_link_libraries(tty_test sel4runtime muslc sel4 sosapi)
+add_executable(clock_driver EXCLUDE_FROM_ALL src/clock.c src/device.c)
+target_include_directories(clock_driver PRIVATE include)
+target_link_libraries(clock_driver clock sel4runtime muslc sel4 sosapi utils)
 
 # warn about everything
 add_compile_options(-Wall -Werror -W -Wextra)
 
-add_app(tty_test)
+add_app(clock_driver)

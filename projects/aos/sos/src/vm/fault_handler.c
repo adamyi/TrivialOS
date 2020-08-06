@@ -102,6 +102,13 @@ bool ensure_mapping(cspace_t *cspace, void *vaddr, process_t *proc, addrspace_t 
                 set_frame_pte(pte->frame, pte);
             }
             break;
+            case DEVICE:
+            err = app_map_device(cspace, as, vaddr, pte, coro);
+            if (err != seL4_NoError) {
+                ZF_LOGE("app_map_device failed");
+                return false;
+            }
+            break;
             case SHARED_VM:
             // TODO
             break;

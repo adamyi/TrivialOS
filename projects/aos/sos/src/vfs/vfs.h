@@ -82,3 +82,5 @@ int vfs_open(char *pathname, int flags, vnode_t **res, coro_t me);
 int vfs_close(vnode_t *vn, coro_t me);
 int vfs_getdirent(int pos, char *name, size_t nbyte, coro_t me);
 int vfs_stat(char *name, sos_stat_t *stat, coro_t me);
+
+void fuck();

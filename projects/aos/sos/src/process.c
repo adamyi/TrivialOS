@@ -5,7 +5,8 @@
 
 #include <sel4runtime.h>
 #include <sel4runtime/auxv.h>
-#include <clock/clock.h>
+// #include <clock/clock.h>
+#include <clock/device.h>
 
 #include "elfload.h"
 #include "process.h"
@@ -30,6 +31,9 @@ process_t runprocs[MAX_PROCS];
 static rid_t proc_rid;
 
 static seL4_CPtr ipc_ep;
+static seL4_CPtr timer_ep;
+
+extern seL4_CPtr timer_cptr;
 
 void process_init() {
     if (rid_init(&proc_rid, MAX_PID, 1) < 0) {
@@ -213,12 +217,14 @@ static void _delete_process(process_t *proc, coro_t coro);
 
 /* Start process, and return pid if successful
  */
-pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
+pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, coro_t coro) {
+    printf("ccccc\n");
     sos_stat_t file_stat;
     if (vfs_stat(app_name, &file_stat, coro) < 0) {
         ZF_LOGE("file not exist");
         return -1;
     }
+    printf("ccccc\n");
     if (!(file_stat.st_fmode & FM_EXEC)) {
         ZF_LOGE("ok russian hacker, it's not executable");
         return -1;
@@ -301,7 +307,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
 
     printf("aaaaaaaaaaaa\n");
     /* now mutate the cap, thereby setting the badge */
-    err = cspace_mint(&(proc->cspace), user_ep, cspace, ipc_ep, seL4_AllRights, proc->pid);
+    err = cspace_mint(&(proc->cspace), user_ep, cspace, ipc_ep, seL4_AllRights, PID_TO_BADGE(proc->pid));
     if (err) {
         ZF_LOGE("Failed to mint user ep");
         _delete_process(proc, coro);
@@ -360,7 +366,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
 
     printf("aaaaaaaaaaaa\n");
     /* now mutate the cap, thereby setting the badge */
-    err = cspace_mint(cspace, proc->kernel_ep, cspace, ipc_ep, seL4_AllRights, proc->pid);
+    err = cspace_mint(cspace, proc->kernel_ep, cspace, ipc_ep, seL4_AllRights, PID_TO_BADGE(proc->pid));
     if (err) {
         ZF_LOGE("Failed to mint user ep");
         _delete_process(proc, coro);
@@ -429,6 +435,11 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
 
     elf_t elf_file = {};
 
+    for (int i = 0; i < 64; i++) {
+        printf("%x ", *((char *)headerbytes+i));
+    }
+    printf("\n");
+
     /* Ensure that the file is an elf file. */
     /* we only check ELF header and program header table without checking section header table */
     if (elf_newFile_maybe_unsafe(headerbytes, headersize, true, false, &elf_file)) {
@@ -465,6 +476,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
         _delete_process(proc, coro);
         return -1;
     }
+    uintptr_t entrypoint = elf_getEntryPoint(&elf_file);
 
     unpin_frame(headerframe);
     free_frame(headerframe);
@@ -490,12 +502,21 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
     }
 
     printf("aaaaaaaaaaaa\n");
-    fdtable_init(&proc->fdt);
+    fdtable_init(&proc->fdt, coro);
+
+    if (hook) {
+        err = hook(proc, coro);
+        if (err != 0) {
+            ZF_LOGE("Failed in proc create hook");
+            _delete_process(proc, coro);
+            return -1;
+        }
+    }
 
     printf("aaaaaaaaaaaa\n");
     /* Start the new process */
     seL4_UserContext context = {
-        .pc = elf_getEntryPoint(&elf_file),
+        .pc = entrypoint,
         .sp = sp,
     };
 
@@ -511,11 +532,26 @@ pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro) {
         _delete_process(proc, coro);
         return -1;
     }
-    proc->stime = get_time();
+    proc->stime = 0; // TODO get_time();
     proc->state = PROC_RUNNING;
     return proc->pid;
 }
 
+seL4_Error clock_hook(process_t *proc, coro_t coro) {
+    seL4_Error err = as_define_region(proc->addrspace, PROCESS_VMEM_START, PAGE_SIZE_4K, seL4_AllRights,
+                seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, NULL);
+    if (err) return err;
+    seL4_CPtr user_ep = cspace_alloc_slot(&(proc->cspace));
+    if (user_ep == seL4_CapNull) return seL4_NotEnoughMemory;
+    err = cspace_mint(&(proc->cspace), user_ep, &cspace, timer_ep, seL4_AllRights, PID_TO_BADGE(proc->pid));
+    if (err) return err;
+    ut_t* reply_ut = ut_alloc(seL4_ReplyBits, &cspace);
+    seL4_CPtr reply_obj = cspace_alloc_slot(&(proc->cspace));
+    if (reply_obj == seL4_CapNull) return seL4_NotEnoughMemory;
+    err = cspace_untyped_retype(&(proc->cspace), reply_ut->cap, reply_obj, seL4_ReplyObject, seL4_ReplyBits);
+    if (err) return err;
+    return sos_clone_and_map_device_frame(proc->addrspace, &cspace, timer_cptr, PROCESS_VMEM_START, coro);
+}
 
 void *_start_first_process_impl(void *args) {
     struct sfp_args *sargs = args;
@@ -523,11 +559,13 @@ void *_start_first_process_impl(void *args) {
     char *app_name = sargs->app_name;
     coro_t coro = sargs->coro;
 
-    start_process(cspace, app_name, coro);
+    start_process(cspace, "clock_driver", clock_hook, coro);
+    start_process(cspace, app_name, NULL, coro);
 }
 
-bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep) {
-    ipc_ep = ep;
+bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr _ipc_ep, seL4_CPtr _timer_ep) {
+    ipc_ep = _ipc_ep;
+    timer_ep = _timer_ep;
     coro_t c = coroutine(_start_first_process_impl);
     struct sfp_args args = {
         .cspace = cspace,

@@ -8,7 +8,7 @@
 #include "memory.h"
 #include "process.h"
 
-#define SYSCALL_NUM (16)
+#define SYSCALL_NUM (18)
 
 static syscall_t *syscalls[SYSCALL_NUM];
 
@@ -32,6 +32,8 @@ void init_syscall() {
     INSTALL_SYSCALL(process_wait);
     INSTALL_SYSCALL(mmap);
     INSTALL_SYSCALL(munmap);
+    INSTALL_SYSCALL(timer_callback);
+    INSTALL_SYSCALL(timer_ack);
     // did you change SYSCALL_NUM?
 }
 
@@ -65,7 +67,7 @@ static void *_handle_syscall_impl(void *args) {
         ZF_LOGE("Unmatch syscall %s\n", syscalls[syscall_number]->name);
         reply_msg = return_error();
     } else {
-        // ZF_LOGE("Calling syscall %s\n", syscalls[syscall_number]->name);
+        ZF_LOGE("%s (%d) calling syscall %s\n", proc->command, proc->pid, syscalls[syscall_number]->name);
         reply_msg = syscalls[syscall_number]->implementation(cspace, proc, coro);
     }
     // the only syscall that doesn't reply is to kill oneself

@@ -17,12 +17,15 @@ IMPLEMENT_SYSCALL(process_create, 2) {
     if (pathlen > PATH_MAX) {
         return return_word(-ENAMETOOLONG);
     }
+    printf("bbbbb\n");
 
     int err = copy_in(cspace, proc->addrspace, proc, pathname_ptr, pathlen, pathname, me);
     if (err) return return_word(-EINVAL);
     pathname[pathlen] = '\0';
+    printf("bbbbb\n");
 
-    pid_t pid = start_process(cspace, pathname, me);
+    pid_t pid = start_process(cspace, pathname, NULL, me);
+    printf("bbbbb\n");
 
     return return_word(pid);
 }

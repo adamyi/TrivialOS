@@ -27,6 +27,10 @@
 #define PROC_BLOCKED      2
 #define PROC_TO_BE_KILLED 3
 
+#define PID_TO_BADGE(pid) ((pid)+(100))
+#define BADGE_TO_PID(bad) ((bad)-(100))
+#define CLOCK_DRIVER_PID 1
+
 typedef int pid_t;
 
 typedef struct {
@@ -74,6 +78,8 @@ struct process {
 
 };
 
+typedef seL4_Error (*proc_create_hook)(struct process *proc, coro_t coro);
+
 extern process_t *currproc;
 extern process_t oldprocs[];
 extern process_t runprocs[];
@@ -91,7 +97,8 @@ void process_init();
 
 void kill_process(process_t *proc, coro_t coro);
 
-bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr ep);
-pid_t start_process(cspace_t *cspace, char *app_name, coro_t coro);
+bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr _ipc_ep, seL4_CPtr _timer_ep);
+pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, coro_t coro);
+
 
 process_t *get_process_by_pid(pid_t pid);

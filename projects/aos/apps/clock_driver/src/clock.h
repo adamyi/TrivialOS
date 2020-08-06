@@ -28,7 +28,7 @@
 #define MAX_TIMER_ID 10
 
 typedef uint64_t timestamp_t;
-typedef void (*timer_callback_t)(uint32_t id, void *data);
+typedef void (*timer_callback_t)(uint32_t id, void *data1, void *data2);
 
 
 /*
@@ -53,7 +53,7 @@ timestamp_t get_time(void);
  * @param data      Custom data to be passed to callback function
  * @return          0 on failure, otherwise an unique ID for this timeout
  */
-uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data);
+uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data1, void *data2);
 
 /**
  * Remove a previously registered callback by its ID
@@ -73,8 +73,4 @@ int stop_timer(void);
 /*
  * Signal to the timer than an IRQ was received.
  */
-int timer_irq(
-    void *data,
-    seL4_Word irq,
-    seL4_IRQHandler irq_handler
-);
+int timer_irq();

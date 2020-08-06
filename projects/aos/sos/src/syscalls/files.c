@@ -3,11 +3,15 @@
 #include <limits.h>
 #include <fcntl.h>
 #include <sel4runtime.h>
+#include <sel4/arch/syscalls.h>
 #include "syscall.h"
 #include "files.h"
 
 #include "../vfs/vfs.h"
 #include "../vfs/uio.h"
+
+extern void *timer_vaddr;
+extern seL4_CPtr timer_cptr;
 
 IMPLEMENT_SYSCALL(open, 3) {
     char pathname[PATH_MAX + 1];

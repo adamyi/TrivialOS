@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <assert.h>
-#include <clock/clock.h>
+#include <sel4/sel4.h>
 #include <utils/util.h>
 
 #include "device.h"
@@ -60,7 +60,7 @@ uint64_t read_timestamp(volatile meson_timer_reg_t *timer)
         hi = timer->timer_e_hi;
     }
 
-    timestamp_t time = hi << 32;
+    uint64_t time = hi << 32;
     time |= lo & MASK(32);
     return time;
 }

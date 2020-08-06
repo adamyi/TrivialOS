@@ -18,13 +18,16 @@
 #define PTE_BITS (12)
 #define PTE_SIZE ((1)<<(PTE_BITS))
 
+#define MAX_DEVICE_MAP 10
+
 typedef struct process process_t;
 
 typedef enum {
     IN_MEM = 0,
     PAGING_OUT = 1,
     PAGED_OUT = 2,
-    SHARED_VM = 3,
+    DEVICE = 3,
+    SHARED_VM = 4,
 } pte_type_t;
 
 PACKED struct pde {
@@ -40,8 +43,8 @@ PACKED struct pte {
     seL4_Word reserved : 16;
     frame_ref_t frame : 20;
     seL4_ARM_Page cap : 20;
-    pte_type_t type: 2;
-    seL4_Word free : 5;
+    pte_type_t type: 3;
+    seL4_Word free : 4;
     bool inuse : 1;
 };
 
@@ -64,3 +67,6 @@ void unmap_vaddr_from_sos(cspace_t *cspace, seL4_CPtr local_cptr);
 int copy_in(cspace_t *cspace, addrspace_t *as, process_t *proc, vaddr_t vaddr, size_t size, void *dest, coro_t coro);
 int copy_out(cspace_t *cspace, addrspace_t *as, process_t *proc, vaddr_t vaddr, size_t size, void *src, coro_t coro);
 void pagetable_destroy(addrspace_t *as, cspace_t *cspace, coro_t coro);
+seL4_Error app_map_device(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, pte_t *pte, coro_t coro);
+seL4_Error app_alloc_map_device(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, uintptr_t addr, coro_t coro);
+seL4_Error sos_clone_and_map_device_frame(addrspace_t *as, cspace_t *cspace, seL4_CPtr device_cap, seL4_Word vaddr, coro_t coro);

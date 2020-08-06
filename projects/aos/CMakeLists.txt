@@ -14,6 +14,7 @@ cmake_minimum_required(VERSION 3.7.2)
 # add apps
 add_subdirectory(apps/tty_test)
 add_subdirectory(apps/sosh)
+add_subdirectory(apps/clock_driver)
 # add any additional apps here
 
 # add sos itself, this is your OS

@@ -11,6 +11,8 @@
  */
 #pragma once
 
+#include <sel4/sel4.h>
+
 #define TIMER_BASE      0xc1100000
 #define TIMER_MAP_BASE  0xc1109000
 

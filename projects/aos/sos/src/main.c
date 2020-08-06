@@ -20,7 +20,8 @@
 #include <aos/sel4_zf_logif.h>
 #include <aos/debug.h>
 
-#include <clock/clock.h>
+// #include <clock/clock.h>
+#include <clock/device.h>
 #include <cpio/cpio.h>
 #include <serial/serial.h>
 
@@ -67,6 +68,65 @@ cspace_t cspace;
 
 process_t *currproc;
 
+seL4_CPtr timer_cptr;
+void *timer_vaddr;
+
+static seL4_CPtr ipc_ep;
+seL4_CPtr timer_ep;
+seL4_IRQHandler *timer_irq_handler;
+
+typedef void (*timer_callback_t)(uint32_t id, void *data);
+
+int timer_irq(
+    void *data,
+    seL4_Word irq,
+    seL4_IRQHandler irq_handler
+) {
+    printf("timer irq\n");
+    seL4_Send(timer_ep, seL4_MessageInfo_new(0, 0, 0, 1));
+    seL4_Word badge = 0;
+    // stupid mcs, how do i call recv without a reply obj
+    // i don't want to reply cuz i'm mean
+    seL4_CPtr reply;
+    ut_t *reply_ut = alloc_retype(&reply, seL4_ReplyObject, seL4_ReplyBits);
+    while (1) {
+        //printf("w\n");
+        seL4_MessageInfo_t msg = seL4_Recv(timer_ep, &badge, reply);
+        //printf("wr\n");
+        //printf("%d %d\n", seL4_MessageInfo_get_label(msg), seL4_MessageInfo_get_length(msg));
+        //printf("%lld %d %d %d\n", badge, seL4_GetMR(0), seL4_GetMR(1), seL4_GetMR(2));
+        if (badge & IRQ_EP_BADGE) {
+            /* It's a notification from our bound notification
+             * object! */
+            sos_handle_irq_notification(&badge);
+            continue;
+        }
+        if (badge != PID_TO_BADGE(CLOCK_DRIVER_PID)) {
+            continue;
+        }
+        printf("%d %d\n", seL4_MessageInfo_get_label(msg), seL4_MessageInfo_get_length(msg));
+        printf("%lld %d %d %d\n", badge, seL4_GetMR(0), seL4_GetMR(1), seL4_GetMR(2));
+        if (seL4_MessageInfo_get_length(msg) == 3) {
+            unsigned int id = seL4_GetMR(0);
+            timer_callback_t cb = seL4_GetMR(1);
+            void *data = seL4_GetMR(2);
+            printf("cb\n");
+            cb(id, data);
+            printf("cbb\n");
+        } else {
+            break;
+        }
+    }
+    cspace_delete(&cspace, reply);
+    cspace_free_slot(&cspace, reply);
+    ut_free(reply_ut);
+    seL4_Error ack_err = seL4_IRQHandler_Ack(irq_handler);
+    printf("%d\n", ack_err);
+    if (ack_err != seL4_NoError) return ack_err;
+
+    return seL4_NoError;
+}
+
 NORETURN void syscall_loop(seL4_CPtr ep)
 {
     while (1) {
@@ -85,12 +145,15 @@ NORETURN void syscall_loop(seL4_CPtr ep)
          * see what the message is about */
         seL4_Word label = seL4_MessageInfo_get_label(message);
 
-        process_t *proc = get_process_by_pid(badge);
+        process_t *proc = get_process_by_pid(BADGE_TO_PID(badge));
         currproc = proc;
+
+        // printf("got msg from badge %lld\n", badge);
 
         if (badge & IRQ_EP_BADGE) {
             /* It's a notification from our bound notification
              * object! */
+            // printf("handle irq %lld\n", IRQ_EP_BADGE);
             sos_handle_irq_notification(&badge);
             cspace_delete(&cspace, reply);
             cspace_free_slot(&cspace, reply);
@@ -121,7 +184,7 @@ NORETURN void syscall_loop(seL4_CPtr ep)
  * Note that these objects will never be freed, so we do not
  * track the allocated ut objects anywhere
  */
-static void sos_ipc_init(seL4_CPtr *ipc_ep, seL4_CPtr *ntfn)
+static void sos_ipc_init(seL4_CPtr *ipc_ep, seL4_CPtr *timer_ep, seL4_CPtr *ntfn)
 {
     /* Create an notification object for interrupts */
     ut_t *ut = alloc_retype(ntfn, seL4_NotificationObject, seL4_NotificationBits);
@@ -133,6 +196,10 @@ static void sos_ipc_init(seL4_CPtr *ipc_ep, seL4_CPtr *ntfn)
 
     /* Create an endpoint for user application IPC */
     ut = alloc_retype(ipc_ep, seL4_EndpointObject, seL4_EndpointBits);
+    ZF_LOGF_IF(!ut, "No memory for endpoint");
+
+    /* Create an endpoint for timer driver IPC */
+    ut = alloc_retype(timer_ep, seL4_EndpointObject, seL4_EndpointBits);
     ZF_LOGF_IF(!ut, "No memory for endpoint");
 }
 
@@ -180,13 +247,10 @@ void init_muslc(void)
     muslcsys_install_syscall(__NR_madvise, sys_madvise);
 }
 
-// TODO: look at this
-static seL4_CPtr ipc_ep;
-
 static void start_sosh() {
     /* Start the user application */
     printf("Start first process\n");
-    bool success = start_first_process(&cspace, TTY_NAME, ipc_ep);
+    bool success = start_first_process(&cspace, TTY_NAME, ipc_ep, timer_ep);
     ZF_LOGF_IF(!success, "Failed to start first process");
 }
 
@@ -194,7 +258,7 @@ NORETURN void *main_continued(UNUSED void *arg)
 {
     /* Initialise other system compenents here */
     seL4_CPtr ntfn;
-    sos_ipc_init(&ipc_ep, &ntfn);
+    sos_ipc_init(&ipc_ep, &timer_ep, &ntfn);
     sos_init_irq_dispatch(
         &cspace,
         seL4_CapIRQControl,
@@ -210,7 +274,7 @@ NORETURN void *main_continued(UNUSED void *arg)
     /* Map the timer device (NOTE: this is the same mapping you will use for your timer driver -
      * sos uses the watchdog timers on this page to implement reset infrastructure & network ticks,
      * so touching the watchdog timers here is not recommended!) */
-    void *timer_vaddr = sos_map_device(&cspace, PAGE_ALIGN_4K(TIMER_MAP_BASE), PAGE_SIZE_4K);
+    timer_vaddr = sos_map_device(&cspace, PAGE_ALIGN_4K(TIMER_MAP_BASE), PAGE_SIZE_4K, &timer_cptr);
 
     process_init();
 
@@ -219,11 +283,11 @@ NORETURN void *main_continued(UNUSED void *arg)
     network_init(&cspace, timer_vaddr, ntfn, start_sosh);
 
     /* Initialises the timer */
-    printf("Timer init\n");
-    start_timer(timer_vaddr);
+    // printf("Timer init\n");
+    // start_timer(timer_vaddr);
     /* You will need to register an IRQ handler for the timer here.
      * See "irq.h". */
-    sos_register_irq_handler(meson_timeout_irq(MESON_TIMER_A), true, timer_irq, NULL, NULL);
+    sos_register_irq_handler(42, true, timer_irq, NULL, timer_irq_handler);
 
     /* Initialize syscall table */
     init_syscall();
@@ -271,6 +335,7 @@ int main(void)
 
     /* test print */
     printf("SOS Started!\n");
+    fuck();
 
     /* allocate a bigger stack and switch to it -- we'll also have a guard page, which makes it much
      * easier to detect stack overruns */

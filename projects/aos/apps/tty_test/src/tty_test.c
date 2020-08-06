@@ -26,25 +26,9 @@
 #include <stdint.h>
 #include <sel4/sel4.h>
 #include <syscalls.h>
+#include <sys/mman.h>
 
 #include <sos.h>
-
-#include "ttyout.h"
-
-// Block a thread forever
-// we do this by making an unimplemented system call.
-static void thread_block(void)
-{
-    /* construct some info about the IPC message tty_test will send
-     * to sos -- it's 1 word long */
-    seL4_MessageInfo_t tag = seL4_MessageInfo_new(0, 0, 0, 1);
-    /* Set the first word in the message to 0 */
-    seL4_SetMR(0, 1);
-    /* Now send the ipc -- call will send the ipc, then block until a reply
-     * message is received */
-    seL4_Call(SYSCALL_ENDPOINT_SLOT, tag);
-    /* Currently SOS does not reply -- so we never come back here */
-}
 
 #include <utils/page.h>
 
@@ -83,7 +67,7 @@ pt_test( void )
 #endif 
 
     /* heap test */
-    char *buf2 = malloc(NPAGES * PAGE_SIZE_4K);
+    /*char *buf2 = malloc(NPAGES * PAGE_SIZE_4K);
     assert(buf2);
     do_pt_test(buf2);
     free(buf2);
@@ -98,17 +82,30 @@ pt_test( void )
     do_pt_test(buf5);
     free(buf4);
     free(buf3);
-    free(buf5);
+    free(buf5);*/
+
+    // mmap 10 pages and munmap them in an annoying order
+    void *x = mmap(0, 5*PAGE_SIZE_4K, PROT_NONE, MAP_SHARED, 0, 0); // 0-4
+    void *y = mmap(x + 5 *PAGE_SIZE_4K, 5*PAGE_SIZE_4K, PROT_NONE, MAP_SHARED, 0, 0); // 5-9
+    assert(x);
+    assert(y);
+    assert(y == x + 5 * PAGE_SIZE_4K);
+    assert(0 == munmap(x+3*PAGE_SIZE_4K, 4 * PAGE_SIZE_4K)); // 3-6
+    assert(munmap(x, 10*PAGE_SIZE_4K) < 0);
+    assert(munmap(x, 5*PAGE_SIZE_4K) < 0);
+    assert(munmap(x+3*PAGE_SIZE_4K, PAGE_SIZE_4K) < 0);
+    assert(munmap(x+6*PAGE_SIZE_4K, 3*PAGE_SIZE_4K) < 0);
+    assert(0 == munmap(x+PAGE_SIZE_4K, PAGE_SIZE_4K)); // 1
+    assert(0 == munmap(x, PAGE_SIZE_4K)); // 0
+    assert(0 == munmap(x+2*PAGE_SIZE_4K, PAGE_SIZE_4K)); // 2
+    assert(0 == munmap(y+2*PAGE_SIZE_4K, 3*PAGE_SIZE_4K)); // 7-9
 }
 
 int main(void)
 {
     sosapi_init_syscall_table();
 
-    /* initialise communication */
-    ttyout_init();
-
-    pt_test();
+    //pt_test();
 
     int pid = sos_my_id();
 
@@ -120,7 +117,8 @@ int main(void)
         printf("calling sleep\n");
         sleep(1);    // Implement this as a syscall
         printf("slept\n");
-    } while (i++ < 6);
+        i++;
+    } while (1);
 
     exit(0);
 

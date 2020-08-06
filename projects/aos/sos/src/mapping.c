@@ -146,7 +146,7 @@ seL4_Error map_frame(cspace_t *cspace, seL4_CPtr frame_cap, seL4_CPtr vspace, se
 
 static uintptr_t device_virt = SOS_DEVICE_START;
 
-void *sos_map_device(cspace_t *cspace, uintptr_t addr, size_t size)
+void *sos_map_device(cspace_t *cspace, uintptr_t addr, size_t size, seL4_CPtr *lastframe)
 {
     assert(cspace != NULL);
     void *vstart = (void *) device_virt;
@@ -184,6 +184,7 @@ void *sos_map_device(cspace_t *cspace, uintptr_t addr, size_t size)
         }
 
         device_virt += PAGE_SIZE_4K;
+        if (lastframe) *lastframe = frame;
     }
 
     return vstart;

@@ -84,15 +84,21 @@ int console_init() {
         return -1;
     }
     queue_init(&newline_queue);
+    printf("serial_init\n");
     handle = serial_init();
+    printf("after serial_init\n");
     vnode_t *vnode = malloc(sizeof(vnode_t));
     if (vnode == NULL) {
         ZF_LOGE("Error making vnode");
         return -1;
     }
+    printf("aaa\n");
     vnode_init(vnode, &root_console_ops, handle);
+    printf("aaa\n");
     serial_register_handler(handle, console_read_handler); 
+    printf("aaa\n");
     register_device("console", vnode);
+    printf("aaa\n");
 
     return 0;
 }
