@@ -170,6 +170,7 @@ long sos_sys_brk(uintptr_t newbrk) {
 }
 
 long sos_sys_mmap(uintptr_t vaddr, size_t len, int prot) {
+    printf("mmap %p %d\n", vaddr, len);
     seL4_SetMR(0, SYSCALL_NO_MMAP);
     seL4_SetMR(1, vaddr);
     seL4_SetMR(2, len);
@@ -177,7 +178,7 @@ long sos_sys_mmap(uintptr_t vaddr, size_t len, int prot) {
     seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 4));
     long res = seL4_GetMR(0);
     printf("loooooooooooolllllll %p\n", res);
-    return seL4_GetMR(0);
+    return res;
 }
 
 long sos_sys_munmap(uintptr_t vaddr, size_t len) {

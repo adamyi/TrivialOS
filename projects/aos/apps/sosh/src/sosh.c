@@ -193,7 +193,7 @@ static int exec(int argc, char **argv)
         printf("Failed!\n");
     }
     if (bg == 0) {
-        in = open("console", O_RDONLY);
+        while ((in = open("console", O_RDONLY)) < 0) sleep(1);
         assert(in >= 0);
     }
     return 0;
@@ -335,7 +335,7 @@ int main(void)
     done = 0;
     new = 1;
 
-    printf("\n[SOS Starting]\n");
+    printf("\n[SOS Starting %d]\n", in);
 
     while (!done) {
         if (new) {

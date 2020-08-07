@@ -88,7 +88,7 @@ static inline seL4_MessageInfo_t read_write(SYSCALL_PARAMS, int is_write) {
 
     bool cont = true;
 
-    while (remaining > 0 && cont) {
+    while (remaining > 0 && cont && proc->state != PROC_TO_BE_KILLED) {
         uio_t myuio;
         size_t rem = remaining < PAGE_SIZE_4K ? remaining : PAGE_SIZE_4K;
         int nb;

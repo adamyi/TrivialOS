@@ -40,7 +40,8 @@ IMPLEMENT_SYSCALL(process_delete, 1) {
         kill_process(check_proc, me);
     } else if (check_proc->state == PROC_BLOCKED) {
         check_proc->state = PROC_TO_BE_KILLED;
-        wait_for_process_exit(pid, me);
+        if (check_proc->kill_hook) check_proc->kill_hook(check_proc->kill_hook_data);
+        wait_for_process_exit(pid, proc, me);
     }
     return return_word(0);
 }
@@ -65,6 +66,6 @@ IMPLEMENT_SYSCALL(process_status, 2) {
 
 IMPLEMENT_SYSCALL(process_wait, 1) {
     pid_t pid = seL4_GetMR(1);
-    pid_t child_pid = wait_for_process_exit(pid, me);
+    pid_t child_pid = wait_for_process_exit(pid, proc, me);
     return return_word(child_pid);
 }

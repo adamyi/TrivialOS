@@ -5,7 +5,7 @@
 
 #define OPEN_MAX 128
 
-#define MIN_FD 3 // otherwise muslc is getting "very confused"
+#define MIN_FD 0
 
 #define IS_VALID_FD(fd) (((fd) >= (0)) && ((fd) < (OPEN_MAX)))
 

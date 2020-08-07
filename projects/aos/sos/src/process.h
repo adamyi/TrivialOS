@@ -71,6 +71,8 @@ struct process {
     addrspace_t *addrspace;
 
     runqueue_t *exit_blocked;
+    void (*kill_hook)(void *data);
+    void *kill_hook_data;
 
     coro_t paging_coro;
 
@@ -96,6 +98,7 @@ seL4_CPtr sched_ctrl_end;
 void process_init();
 
 void kill_process(process_t *proc, coro_t coro);
+pid_t wait_for_process_exit(pid_t pid, process_t *me, coro_t coro);
 
 bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr _ipc_ep, seL4_CPtr _timer_ep);
 pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, coro_t coro);

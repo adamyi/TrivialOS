@@ -65,9 +65,12 @@ pt_test( void )
     /* stack test */
     do_pt_test(buf1);
 #endif 
+    printf("pt_test\n");
 
     /* heap test */
-    /*char *buf2 = malloc(NPAGES * PAGE_SIZE_4K);
+    
+    char *buf2 = malloc(NPAGES * PAGE_SIZE_4K);
+    printf("buf2 %p\n", buf2);
     assert(buf2);
     do_pt_test(buf2);
     free(buf2);
@@ -82,7 +85,8 @@ pt_test( void )
     do_pt_test(buf5);
     free(buf4);
     free(buf3);
-    free(buf5);*/
+    free(buf5);
+    
 
     // mmap 10 pages and munmap them in an annoying order
     void *x = mmap(0, 5*PAGE_SIZE_4K, PROT_NONE, MAP_SHARED, 0, 0); // 0-4
@@ -105,7 +109,14 @@ int main(void)
 {
     sosapi_init_syscall_table();
 
-    //pt_test();
+    printf("hello\n");
+
+/*
+    pt_test();
+    return 0;
+    */
+    
+    printf("hello\n");
 
     int pid = sos_my_id();
 

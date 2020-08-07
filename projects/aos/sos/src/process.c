@@ -237,6 +237,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, cor
 
     process_t *proc = runprocs + (pid % MAX_PROCS);
     proc->pid = pid;
+    proc->kill_hook = NULL;
 
     /* Create a VSpace */
     proc->vspace_ut = alloc_retype(&(proc->vspace), seL4_ARM_PageGlobalDirectoryObject,
@@ -579,7 +580,7 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr _ipc_ep, se
 static void exhaust_runqueue(runqueue_t **queue, pid_t pid) {
     while (*queue != NULL) {
         printf("exhaust_runqueue: resume %p", (*queue)->coro);
-        resume((*queue)->coro, pid);
+        if ((*queue)->coro) resume((*queue)->coro, pid);
         runqueue_t *last = *queue;
         *queue = (*queue)->next;
         free(last);
@@ -587,7 +588,19 @@ static void exhaust_runqueue(runqueue_t **queue, pid_t pid) {
     printf("exhaust_runqueue finish\n");
 }
 
-pid_t wait_for_process_exit(pid_t pid, coro_t coro) {
+struct kill_hook_data {
+    coro_t coro;
+    runqueue_t *queue;
+};
+
+static void waiting_proc_kill_hook(void *data) {
+    runqueue_t *rq = data;
+    coro_t coro = rq->coro;
+    rq->coro = NULL;
+    resume(coro, -1);
+}
+
+pid_t wait_for_process_exit(pid_t pid, process_t *me, coro_t coro) {
     runqueue_t **queue;
     if (pid == -1) {
         queue = &global_exit_blocked;
@@ -602,7 +615,10 @@ pid_t wait_for_process_exit(pid_t pid, coro_t coro) {
     rq->coro = coro;
     rq->next = *queue;
     *queue = rq;
+    me->kill_hook = waiting_proc_kill_hook;
+    me->kill_hook_data = rq;
     void *retpid = yield(NULL);
+    me->kill_hook_data = me->kill_hook = NULL;
     return (pid_t) retpid;
 }
 
