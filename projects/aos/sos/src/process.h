@@ -97,6 +97,8 @@ seL4_CPtr sched_ctrl_end;
 
 void process_init();
 
+unsigned get_time();
+
 void kill_process(process_t *proc, coro_t coro);
 pid_t wait_for_process_exit(pid_t pid, process_t *me, coro_t coro);
 

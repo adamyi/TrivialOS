@@ -6,6 +6,7 @@
 #include "time.h"
 
 #include "../coroutine/picoro.h"
+#include "../process.h"
 
 static coro_t timestampcoro = NULL;
 static coro_t drivercoro = NULL;
@@ -18,11 +19,7 @@ typedef void (*timer_callback_t)(uint32_t id, void *data);
 IMPLEMENT_SYSCALL(time_stamp, 0) {
     (void) proc;
     (void) me;
-    // can't read (terrible) doc, dunno how to use seL4_Call
-    seL4_Call(timer_ep, seL4_MessageInfo_new(0, 0, 0, 0));
-    //seL4_Word badge = 0;
-    //seL4_Recv(timer_ep, &badge);
-    return return_word(seL4_GetMR(0));
+    return return_word(get_time());
 }
 
 void usleep_callback(unsigned int id, void *data) {
@@ -32,6 +29,10 @@ void usleep_callback(unsigned int id, void *data) {
 
 IMPLEMENT_SYSCALL(usleep, 1) {
     (void) proc;
+    if (!is_clock_driver_ready()) {
+        ZF_LOGE("Clock driver is not yet ready! (you bad bad, did you kill my driver? it's probably respawning now)");
+        return return_word(-1);
+    }
     //register_timer(seL4_GetMR(1) * 1000, usleep_callback, me);
     seL4_SetMR(0, seL4_GetMR(1) * 1000);
     seL4_SetMR(1, usleep_callback);

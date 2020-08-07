@@ -33,7 +33,27 @@ static rid_t proc_rid;
 static seL4_CPtr ipc_ep;
 static seL4_CPtr timer_ep;
 
+static pid_t clock_driver_pid = -1;
+
 extern seL4_CPtr timer_cptr;
+
+bool is_clock_driver_ready() {
+    return clock_driver_pid >= 0;
+}
+
+unsigned get_time() {
+    if (is_clock_driver_ready()) {
+        seL4_Call(timer_ep, seL4_MessageInfo_new(0, 0, 0, 0));
+        return seL4_GetMR(0);
+    }
+    /* if clock driver gets killed, we auto-respawn it */
+    /* for simplicity, we always set stime of clock driver to 0 */
+    /* even if it is respawned. */
+    /* */
+    /* when clock driver gets killed, timestamp counting doesn't stop */
+    /* when it comes back, we still have the correct timestamp :-) */
+    return 0;
+}
 
 void process_init() {
     if (rid_init(&proc_rid, MAX_PID, 1) < 0) {
@@ -533,7 +553,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, cor
         _delete_process(proc, coro);
         return -1;
     }
-    proc->stime = 0; // TODO get_time();
+    proc->stime = get_time();
     proc->state = PROC_RUNNING;
     return proc->pid;
 }
@@ -554,13 +574,18 @@ seL4_Error clock_hook(process_t *proc, coro_t coro) {
     return sos_clone_and_map_device_frame(proc->addrspace, &cspace, timer_cptr, PROCESS_VMEM_START, coro);
 }
 
+static void start_clock_driver(cspace_t *cspace, coro_t coro) {
+    if ((clock_driver_pid = start_process(cspace, "clock_driver", clock_hook, coro)) == -1) {
+        ZF_LOGE("Failed to start clock_driver");
+    }
+}
+
 void *_start_first_process_impl(void *args) {
     struct sfp_args *sargs = args;
     cspace_t *cspace = sargs->cspace;
     char *app_name = sargs->app_name;
     coro_t coro = sargs->coro;
-
-    start_process(cspace, "clock_driver", clock_hook, coro);
+    start_clock_driver(cspace, coro);
     start_process(cspace, app_name, NULL, coro);
 }
 
@@ -626,6 +651,12 @@ static void _delete_process(process_t *proc, coro_t coro) {
 
     rid_remove_id(&proc_rid, proc->pid);
 
+    bool restart_clock = false;
+    if (proc->pid == clock_driver_pid) {
+        clock_driver_pid = -1;
+        restart_clock = true;
+    }
+
     // this is safe to call if everything is null
     fdtable_destroy(&(proc->fdt), coro);
 
@@ -659,6 +690,8 @@ static void _delete_process(process_t *proc, coro_t coro) {
     if (proc->cspace.root_cnode != seL4_CapNull) cspace_destroy(&(proc->cspace));
 
     proc->state = PROC_FREE;
+
+    if (restart_clock) start_clock_driver(&cspace, coro);
 }
 
 void kill_process(process_t *proc, coro_t coro) {
