@@ -30,7 +30,7 @@ struct vm_fault_handler_args {
     coro_t coro;
 };
 
-bool ensure_mapping(cspace_t *cspace, void *vaddr, process_t *proc, addrspace_t *as, coro_t coro, bool *kill) {
+bool ensure_mapping(cspace_t *cspace, void *vaddr, process_t *proc, addrspace_t *as, coro_t coro) {
     region_t *region;
 
     /* check if it's a stack extension first */
@@ -49,7 +49,6 @@ bool ensure_mapping(cspace_t *cspace, void *vaddr, process_t *proc, addrspace_t 
                 region = region->next;
             }
             ZF_LOGE("VM Fault ...  did you overflow your buffer again?!?");
-            *kill = true;
             return false;
         }
     }
@@ -61,9 +60,9 @@ bool ensure_mapping(cspace_t *cspace, void *vaddr, process_t *proc, addrspace_t 
 
     if (pte == NULL) {
         /* Alloc frame */
-        seL4_Error err = alloc_map_frame(as, cspace, (vaddr_t) vaddr, region->rights, region->attrs, NULL, coro);
+        seL4_Error err = alloc_map_frame(as, cspace, (vaddr_t) vaddr, region->rights, region->attrs, NULL, coro, false);
         if (err != seL4_NoError) {
-            ZF_LOGE("Failed to map new frame");
+            ZF_LOGE("OOM: Failed to map new frame. Killing app");
             return false;
         }
     } else {
@@ -84,10 +83,10 @@ bool ensure_mapping(cspace_t *cspace, void *vaddr, process_t *proc, addrspace_t 
             proc->paging_coro = NULL;
             // i think we can directly fallthrough to PAGED_OUT case here
             // but to be on the safe side, we check everything again :)
-            return ensure_mapping(cspace, vaddr, proc, as, coro, kill);
+            return ensure_mapping(cspace, vaddr, proc, as, coro);
             case PAGED_OUT:;
             size_t pfidx = pte->frame;
-            seL4_Error err = alloc_map_frame(as, cspace, (vaddr_t) vaddr, region->rights, region->attrs, NULL, coro);
+            seL4_Error err = alloc_map_frame(as, cspace, (vaddr_t) vaddr, region->rights, region->attrs, NULL, coro, false);
             if (err != seL4_NoError) {
                 ZF_LOGE("Failed to map new frame");
                 return false;
@@ -97,7 +96,7 @@ bool ensure_mapping(cspace_t *cspace, void *vaddr, process_t *proc, addrspace_t 
                     ZF_LOGE("Failed to pagein");
                     return false;
                 }
-                printf("frame %d pfidx %d\n", pte->frame, pfidx);
+                printf("frame %d pfidx %d pte %p\n", pte->frame, pfidx, pte);
                 pte->type = IN_MEM;
                 set_frame_pte(pte->frame, pte);
             }
@@ -134,7 +133,7 @@ void *_handle_vm_fault_impl(void *args) {
         ZF_LOGE("Permission fault on page");
         kill = true;
     } else {
-        ensure_mapping(cspace, vaddr, curr, curr->addrspace, coro, &kill);
+        kill = !ensure_mapping(cspace, vaddr, curr, curr->addrspace, coro);
     }
 
     if (kill || curr->state == PROC_TO_BE_KILLED) {
@@ -161,4 +160,26 @@ void handle_vm_fault(cspace_t *cspace, void *vaddr, seL4_Word type, process_t *c
         .coro = c
     };
     resume(c, &args);
+}
+
+struct handle_fault_kill_args {
+    process_t *proc;
+    coro_t coro;
+};
+
+void *_handle_fault_kill(void *data) {
+    struct handle_fault_kill_args *args = data;
+    coro_t coro = args->coro;
+    process_t *proc = args->proc;
+    kill_process(proc, coro);
+}
+
+void handle_fault_kill(process_t *proc) {
+    proc->state = PROC_TO_BE_KILLED;
+    coro_t c = coroutine(_handle_fault_kill);
+    struct handle_fault_kill_args args = {
+        .proc = proc,
+        .coro = c,
+    };
+    resume(c, proc);
 }

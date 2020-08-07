@@ -11,7 +11,7 @@ typedef struct {
     int start_id;
 } rid_t;
 
-int rid_init(rid_t *rid, size_t size, int start_index);
+int rid_init(rid_t *rid, bool *inused, size_t size, int start_index);
 
 /* Return -1 if all ids are in used
  * Return free id on success

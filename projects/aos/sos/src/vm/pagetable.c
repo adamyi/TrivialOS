@@ -207,7 +207,7 @@ pte_t *get_pte(addrspace_t *as, vaddr_t vaddr, bool create, coro_t coro) {
 }
 
 seL4_Error alloc_map_frame(addrspace_t *as, cspace_t *cspace, seL4_Word vaddr,
-                    seL4_CapRights_t rights, seL4_ARM_VMAttributes attrs, pte_t *pte, coro_t coro) {
+                    seL4_CapRights_t rights, seL4_ARM_VMAttributes attrs, pte_t *pte, coro_t coro, bool pinned) {
     frame_ref_t frame = alloc_frame(coro);
     if (frame == NULL_FRAME) {
         ZF_LOGE("Couldn't allocate additional stack frame");
@@ -216,9 +216,10 @@ seL4_Error alloc_map_frame(addrspace_t *as, cspace_t *cspace, seL4_Word vaddr,
     // printf("alloc map frame %d\n", frame);
     pin_frame(frame);
     seL4_Error err = sos_map_frame(as, cspace, frame, vaddr, rights, attrs, pte, coro);
-    unpin_frame(frame);
+    if (!pinned) unpin_frame(frame);
     // printf("alloc map frame %d %p\n", frame, frame_from_ref(frame)->pte);
     if (err != seL4_NoError) {
+        if (pinned) unpin_frame(frame);
         free_frame(frame);
     }
     return err;
@@ -345,8 +346,7 @@ void *map_vaddr_to_sos(cspace_t *cspace, addrspace_t *as, process_t *proc, vaddr
     switch (pte->type) {
         case PAGING_OUT:
         case PAGED_OUT:;
-        bool tmp;
-        if (!ensure_mapping(cspace, (void *) vaddr, proc, as, coro, &tmp)) {
+        if (!ensure_mapping(cspace, (void *) vaddr, proc, as, coro)) {
             ZF_LOGE("Failed ensure_mapping");
             return NULL;
         }

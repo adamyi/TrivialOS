@@ -203,7 +203,10 @@ static inline int pf_getidx() {
             i++;
             j = 1;
         }
-        if (++last_page == PAGEFILE_PAGES) last_page = 0;
+        if (++last_page == PAGEFILE_PAGES) {
+            i = last_page = 0;
+            j = 1;
+        }
     } while (last_page != fp);
     return -1;
 }
@@ -239,7 +242,7 @@ int page_out(frame_ref_t frame_ref, coro_t coro) {
 
     uio_t myuio;
 
-    printf("dopageout %p\n", coro);
+    printf("dopageout %p\n", frame->pte);
     uio_kinit(&myuio, frame_data(frame_ref), PAGE_SIZE_4K, pfidx * PAGE_SIZE_4K, UIO_READ);
     if (VOP_PWRITE(pf_vnode, &myuio, coro) != PAGE_SIZE_4K) {
         ZF_LOGE("page_out: VOP_PWRITE not entire page");

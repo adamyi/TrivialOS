@@ -135,7 +135,7 @@ static int cp(int argc, char **argv)
     return 0;
 }
 
-#define MAX_PROCESSES 40
+#define MAX_PROCESSES 22
 
 static int ps(int argc, char **argv)
 {
@@ -230,9 +230,9 @@ static int dir(int argc, char **argv)
         r = sos_stat(buf, &sbuf);
         if (r < 0) {
             printf("stat(%s) failed: %d\n", buf, r);
-            break;
+        } else {
+            prstat(buf);
         }
-        prstat(buf);
         i++;
     }
     return 0;

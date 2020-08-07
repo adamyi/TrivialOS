@@ -81,7 +81,7 @@ int sos_nfs_open(vnode_t *object, char *pathname, int flags_from_open, vnode_t *
     return cb_ret.status;
 }
 
-int sos_nfs_read(vnode_t *file, struct uio *uio, coro_t me) {
+int sos_nfs_read(vnode_t *file, struct uio *uio, process_t *proc, coro_t me) {
     res_cb_t cb_ret = {
         .coro = me,
         .status = 0,

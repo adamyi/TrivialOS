@@ -60,6 +60,9 @@
 #define IRQ_IDENT_BADGE_BITS MASK(seL4_BadgeBits - 1ul)
 
 
+#define MAX_CONCURRENT_IRQS 10
+
+
 /* provided by gcc */
 extern void (__register_frame)(void *);
 
@@ -82,6 +85,8 @@ int timer_irq(
     seL4_Word irq,
     seL4_IRQHandler irq_handler
 ) {
+    seL4_Word irq_badge_queue[MAX_CONCURRENT_IRQS];
+    int irq_queue_len = -1;
     printf("timer irq\n");
     seL4_Send(timer_ep, seL4_MessageInfo_new(0, 0, 0, 1));
     seL4_Word badge = 0;
@@ -97,8 +102,13 @@ int timer_irq(
         //printf("%lld %d %d %d\n", badge, seL4_GetMR(0), seL4_GetMR(1), seL4_GetMR(2));
         if (badge & IRQ_EP_BADGE) {
             /* It's a notification from our bound notification
-             * object! */
-            sos_handle_irq_notification(&badge);
+             * object! We can't handle this here since irq handler could potentially block the kernel
+             * by calling into clock driver again. instead, we add it to a queue and deal with them
+             * after we finish handling timer irq */
+            if (++irq_queue_len == MAX_CONCURRENT_IRQS) {
+                ZF_LOGF("too many IRQs in timer_irq routine. Please increase MAX_CONCURRENT_IRQS");
+            }
+            irq_badge_queue[irq_queue_len] = badge;
             continue;
         }
         if (badge != PID_TO_BADGE(CLOCK_DRIVER_PID)) {
@@ -122,6 +132,9 @@ int timer_irq(
     ut_free(reply_ut);
     seL4_Error ack_err = seL4_IRQHandler_Ack(irq_handler);
     printf("%d\n", ack_err);
+    for (int i = 0; i <= irq_queue_len; i++) {
+        sos_handle_irq_notification(irq_badge_queue + i);
+    }
     if (ack_err != seL4_NoError) return ack_err;
 
     return seL4_NoError;
@@ -168,12 +181,8 @@ NORETURN void syscall_loop(seL4_CPtr ep)
              * message from tty_test! */
             handle_syscall(&cspace, badge, seL4_MessageInfo_get_length(message) - 1, reply, reply_ut, proc);
         } else {
-            /* some kind of fault */
-            debug_print_fault(message, TTY_NAME);
-            /* dump registers too */
-            debug_dump_registers(proc->tcb);
-
-            ZF_LOGF("The SOS skeleton does not know how to handle faults!");
+            ZF_LOGE("fault!\n");
+            handle_fault_kill(proc);
         }
     }
 }
@@ -335,7 +344,6 @@ int main(void)
 
     /* test print */
     printf("SOS Started!\n");
-    fuck();
 
     /* allocate a bigger stack and switch to it -- we'll also have a guard page, which makes it much
      * easier to detect stack overruns */

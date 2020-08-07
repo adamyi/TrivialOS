@@ -77,6 +77,14 @@ static void console_read_handler(struct serial *serial, char c) {
     }
 }
 
+static void console_kill_hook(void *data) {
+    printf("calling console kill hook\n");
+    (void) data;
+    coro_t c = blocked_reader;
+    blocked_reader = NULL;
+    if (c) resume(c, NULL);
+}
+
 int console_init() {
     kbuff = new_rollingarray(CONSOLE_BUFFER_SIZE);
     if (kbuff == NULL) {
@@ -128,7 +136,7 @@ int console_open(vnode_t *object, char *pathname, int flags_from_open, vnode_t *
     return 0;
 }
 
-int console_read(vnode_t *file, struct uio *uio, coro_t me) {
+int console_read(vnode_t *file, struct uio *uio, process_t *proc, coro_t me) {
     if (!mode_is_read((seL4_Word) file->data)) {
         ZF_LOGE("Calling read on non-reader console vnode");
         return -1;
@@ -138,7 +146,9 @@ int console_read(vnode_t *file, struct uio *uio, coro_t me) {
         assert (blocked_reader == NULL);
         blocked_reader = me;
         ZF_LOGI("console reader blocking");
+        if (proc) proc->kill_hook = console_kill_hook;
         yield(NULL);
+        if (proc) proc->kill_hook = NULL;
         ZF_LOGI("console reader resumed");
         newline_idx = (size_t) queue_peek(&newline_queue);
     }

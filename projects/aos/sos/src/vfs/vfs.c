@@ -7,10 +7,6 @@
 static list_t *device_list = NULL;
 static vnode_t *rootfs = NULL;
 
-void fuck() {
-    printf("device_list %p\n", device_list);
-}
-
 void register_device(char *device, vnode_t *vn) {
     printf("device_list %p\n", device_list);
     if (device_list == NULL) {

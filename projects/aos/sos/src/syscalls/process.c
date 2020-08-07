@@ -24,7 +24,7 @@ IMPLEMENT_SYSCALL(process_create, 2) {
     pathname[pathlen] = '\0';
     printf("bbbbb\n");
 
-    pid_t pid = start_process(cspace, pathname, NULL, me);
+    pid_t pid = start_process(cspace, pathname, NULL, false, me);
     printf("bbbbb\n");
 
     return return_word(pid);

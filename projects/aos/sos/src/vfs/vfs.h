@@ -11,10 +11,10 @@
 #define __VOP(vn, sym) (vnode_check(vn, #sym), (vn)->ops->vop_##sym)
 #define VOP_OPEN(vn, filepath, flags, ret, me)    (__VOP(vn, open)(vn, filepath, flags, ret, me))
 #define VOP_CLOSE(vn, me)                         (__VOP(vn, close)(vn, me))
-#define VOP_READ(vn, uio, me)                     (__VOP(vn, read)(vn, uio, me))
+#define VOP_READ(vn, uio, proc, me)               (__VOP(vn, read)(vn, uio, proc, me))
 #define VOP_WRITE(vn, uio, me)                    (__VOP(vn, write)(vn, uio, me))
-#define VOP_PREAD(vn, uio, me)                     (__VOP(vn, pread)(vn, uio, me))
-#define VOP_PWRITE(vn, uio, me)                    (__VOP(vn, pwrite)(vn, uio, me))
+#define VOP_PREAD(vn, uio, me)                    (__VOP(vn, pread)(vn, uio, me))
+#define VOP_PWRITE(vn, uio, me)                   (__VOP(vn, pwrite)(vn, uio, me))
 #define VOP_STAT(vn, filepath, stat, me)          (__VOP(vn, stat)(vn, filepath, stat, me))
 #define VOP_GET_DIRENT(vn, pos, name, nbyte, me)  (__VOP(vn, get_dirent)(vn, pos, name, nbyte, me))
 
@@ -47,7 +47,7 @@ typedef struct vnode vnode_t;
 
 typedef struct vnode_ops {
     int (*vop_open)(vnode_t *object, char *pathname, int flags_from_open, vnode_t **ret, coro_t me);
-    int (*vop_read)(vnode_t *file, uio_t *uio, coro_t me);
+    int (*vop_read)(vnode_t *file, uio_t *uio, process_t *proc, coro_t me);
     int (*vop_write)(vnode_t *file, uio_t *uio, coro_t me);
     int (*vop_pread)(vnode_t *file, uio_t *uio, coro_t me);
     int (*vop_pwrite)(vnode_t *file, uio_t *uio, coro_t me);
@@ -82,5 +82,3 @@ int vfs_open(char *pathname, int flags, vnode_t **res, coro_t me);
 int vfs_close(vnode_t *vn, coro_t me);
 int vfs_getdirent(int pos, char *name, size_t nbyte, coro_t me);
 int vfs_stat(char *name, sos_stat_t *stat, coro_t me);
-
-void fuck();

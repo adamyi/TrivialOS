@@ -60,7 +60,7 @@ seL4_Error sos_map_frame(struct addrspace *as, cspace_t *cspace, seL4_CPtr frame
 seL4_Error create_pt(pde_t *entry, coro_t coro);
 pte_t *get_pte(addrspace_t *as, vaddr_t vaddr, bool create, coro_t coro);
 seL4_Error alloc_map_frame(addrspace_t *as, cspace_t *cspace, seL4_Word vaddr,
-                    seL4_CapRights_t rights, seL4_ARM_VMAttributes attrs, pte_t *pte, coro_t coro);
+                    seL4_CapRights_t rights, seL4_ARM_VMAttributes attrs, pte_t *pte, coro_t coro, bool pinned);
 void unalloc_frame(addrspace_t *as, cspace_t *cspace, vaddr_t vaddr, coro_t coro);
 void *map_vaddr_to_sos(cspace_t *cspace, addrspace_t *as, process_t *proc, vaddr_t vaddr, seL4_CPtr *local_cptr, size_t *size, coro_t coro);
 void unmap_vaddr_from_sos(cspace_t *cspace, seL4_CPtr local_cptr);

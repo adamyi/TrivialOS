@@ -103,7 +103,7 @@ void kill_process(process_t *proc, coro_t coro);
 pid_t wait_for_process_exit(pid_t pid, process_t *me, coro_t coro);
 
 bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr _ipc_ep, seL4_CPtr _timer_ep);
-pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, coro_t coro);
+pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, bool pinned, coro_t coro);
 
 
 process_t *get_process_by_pid(pid_t pid);

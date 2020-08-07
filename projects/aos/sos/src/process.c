@@ -28,12 +28,14 @@
  */
 pid_t oldpids[MAX_PROCS];
 process_t runprocs[MAX_PROCS];
+static bool rid_inused[MAX_PID];
 static rid_t proc_rid;
 
 static seL4_CPtr ipc_ep;
 static seL4_CPtr timer_ep;
 
 static pid_t clock_driver_pid = -1;
+
 
 extern seL4_CPtr timer_cptr;
 
@@ -43,7 +45,9 @@ bool is_clock_driver_ready() {
 
 unsigned get_time() {
     if (is_clock_driver_ready()) {
+        printf("calling timer_ep\n");
         seL4_Call(timer_ep, seL4_MessageInfo_new(0, 0, 0, 0));
+        printf("called timer_ep\n");
         return seL4_GetMR(0);
     }
     /* if clock driver gets killed, we auto-respawn it */
@@ -56,7 +60,7 @@ unsigned get_time() {
 }
 
 void process_init() {
-    if (rid_init(&proc_rid, MAX_PID, 1) < 0) {
+    if (rid_init(&proc_rid, rid_inused, MAX_PID, 1) < 0) {
         ZF_LOGF("can't init pid");
     }
     memset(runprocs, 0, sizeof(runprocs));
@@ -105,7 +109,7 @@ static int stack_write(seL4_Word *mapped_stack, int index, uintptr_t val)
 
 /* set up System V ABI compliant stack, so that the process can
  * start up and initialise the C library */
-static uintptr_t init_process_stack(process_t *proc, cspace_t *cspace, seL4_CPtr local_vspace, elf_t *elf_file, vnode_t *elf_vnode, coro_t coro)
+static uintptr_t init_process_stack(process_t *proc, cspace_t *cspace, seL4_CPtr local_vspace, elf_t *elf_file, vnode_t *elf_vnode, coro_t coro, bool pinned)
 {
 
     /* virtual addresses in the target process' address space */
@@ -133,7 +137,7 @@ static uintptr_t init_process_stack(process_t *proc, cspace_t *cspace, seL4_CPtr
 
     pte_t stack_pte;
     err = alloc_map_frame(proc->addrspace, cspace, stack_top,
-                                       seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, &stack_pte, coro);
+                                       seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, &stack_pte, coro, pinned);
     
 
     if (err) {
@@ -214,15 +218,15 @@ static uintptr_t init_process_stack(process_t *proc, cspace_t *cspace, seL4_CPtr
     cspace_free_slot(cspace, local_stack_cptr);
 
     /* Exend the stack with extra pages */
-    /*for (int page = 0; page < INITIAL_PROCESS_EXTRA_STACK_PAGES; page++) {
+    for (int page = 0; page < INITIAL_PROCESS_EXTRA_STACK_PAGES; page++) {
         stack_top -= PAGE_SIZE_4K;
-        seL4_CPtr frame_cptr = alloc_map_frame(proc->addrspace, cspace, proc->vspace, stack_top,
-                                        seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever);
-        if (frame_cptr == seL4_CapNull) {
+        err = alloc_map_frame(proc->addrspace, cspace, stack_top,
+                              seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, &stack_pte, coro, pinned);
+        if (err) {
             ZF_LOGE("Couldn't allocate additional stack frame");
             return 0;
         }
-    }*/
+    }
 
     return stack_bottom;
 }
@@ -237,7 +241,7 @@ static void _delete_process(process_t *proc, coro_t coro);
 
 /* Start process, and return pid if successful
  */
-pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, coro_t coro) {
+pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, bool pinned, coro_t coro) {
     printf("ccccc\n");
     sos_stat_t file_stat;
     if (vfs_stat(app_name, &file_stat, coro) < 0) {
@@ -308,7 +312,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, cor
     printf("aaaaaaaaaaaa\n");
     /* Create an IPC frame */
     err = alloc_map_frame(proc->addrspace, cspace, PROCESS_IPC_BUFFER,
-                                        seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, &(proc->ipc_buffer), coro);
+                                        seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, &(proc->ipc_buffer), coro, pinned);
     if (err) {
         ZF_LOGE("Failed to alloc map IPC frame");
         _delete_process(proc, coro);
@@ -443,7 +447,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, cor
         _delete_process(proc, coro);
         return -1;
     }
-    int headersize = VOP_READ(elf_vnode, &myuio, coro);
+    int headersize = VOP_READ(elf_vnode, &myuio, proc, coro);
     if (headersize < 0) {
         ZF_LOGE("can't read elf file");
         unpin_frame(headerframe);
@@ -474,7 +478,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, cor
 
     printf("aaaaaaaaaaaa\n");
     /* set up the stack */
-    seL4_Word sp = init_process_stack(proc, cspace, seL4_CapInitThreadVSpace, &elf_file, elf_vnode, coro);
+    seL4_Word sp = init_process_stack(proc, cspace, seL4_CapInitThreadVSpace, &elf_file, elf_vnode, coro, pinned);
     if (sp == 0) {
         ZF_LOGE("Failed to set up stack");
         unpin_frame(headerframe);
@@ -488,7 +492,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, cor
 
     printf("aaaaaaaaaaaa\n");
     /* load the elf image from NFS*/
-    err = elf_load(cspace, proc, proc->vspace, &elf_file, elf_vnode, proc->addrspace, &heap_start, coro);
+    err = elf_load(cspace, proc, proc->vspace, &elf_file, elf_vnode, proc->addrspace, &heap_start, pinned, coro);
     if (err) {
         ZF_LOGE("Failed to load elf image");
         unpin_frame(headerframe);
@@ -514,13 +518,13 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, cor
 
     printf("aaaaaaaaaaaa\n");
     /* Map in the IPC buffer for the thread */
-    err = sos_map_frame(proc->addrspace, cspace, proc->ipc_buffer.frame, PROCESS_IPC_BUFFER,
+    /*err = sos_map_frame(proc->addrspace, cspace, proc->ipc_buffer.frame, PROCESS_IPC_BUFFER,
                     seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, NULL, coro);
     if (err != 0) {
         ZF_LOGE("Unable to map IPC buffer for user app");
         _delete_process(proc, coro);
         return -1;
-    }
+    }*/
 
     printf("aaaaaaaaaaaa\n");
     fdtable_init(&proc->fdt, coro);
@@ -553,7 +557,9 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, cor
         _delete_process(proc, coro);
         return -1;
     }
+    printf("get time\n");
     proc->stime = get_time();
+    printf("get time finish\n");
     proc->state = PROC_RUNNING;
     return proc->pid;
 }
@@ -575,7 +581,7 @@ seL4_Error clock_hook(process_t *proc, coro_t coro) {
 }
 
 static void start_clock_driver(cspace_t *cspace, coro_t coro) {
-    if ((clock_driver_pid = start_process(cspace, "clock_driver", clock_hook, coro)) == -1) {
+    if ((clock_driver_pid = start_process(cspace, "clock_driver", clock_hook, true, coro)) == -1) {
         ZF_LOGE("Failed to start clock_driver");
     }
 }
@@ -586,7 +592,7 @@ void *_start_first_process_impl(void *args) {
     char *app_name = sargs->app_name;
     coro_t coro = sargs->coro;
     start_clock_driver(cspace, coro);
-    start_process(cspace, app_name, NULL, coro);
+    start_process(cspace, app_name, NULL, false, coro);
 }
 
 bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr _ipc_ep, seL4_CPtr _timer_ep) {

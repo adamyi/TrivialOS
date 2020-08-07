@@ -99,7 +99,7 @@ static inline seL4_MessageInfo_t read_write(SYSCALL_PARAMS, int is_write) {
         } else {
             if (uio_uinit(&myuio, vaddr, rem, 0, UIO_WRITE, cspace, proc, proc->addrspace, me)) return return_word(-1);
             if (myuio.iovec.len < rem) rem = myuio.iovec.len;
-            nb = VOP_READ(fdesc_node->vnode, &myuio, me);
+            nb = VOP_READ(fdesc_node->vnode, &myuio, proc, me);
             // printf("%d %d\n", nb, rem);
             if (nb != rem) cont = false;
         }

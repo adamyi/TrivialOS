@@ -10,11 +10,12 @@
 
 
 /* TODO: Use char array for better efficiency (space) */
-int rid_init(rid_t *rid, size_t size, int start_index) {
+/* inused needs to be of size (size * sizeof(bool)), caller's responsibility to find a space */
+int rid_init(rid_t *rid, bool *inused, size_t size, int start_index) {
     if (rid == NULL) {
         return -EINVAL;
     }
-    rid->inused = malloc(size * sizeof(bool));
+    rid->inused = inused; // malloc(size * sizeof(bool));
     if (rid->inused == NULL) {
         return -ENOMEM;
     }
@@ -72,9 +73,10 @@ void rid_remove_all(rid_t *rid) {
 }
 
 /* Expected to call rid_remove_all before */
+/* Caller's responsibility to free rid->inused since they passed it in */
 int rid_destroy(rid_t *rid) {
     if (rid == NULL) return 0;
-    free(rid->inused);
+    // free(rid->inused);
     rid->inused = NULL;
     rid->size = rid->used_count = 0;
     return 0;

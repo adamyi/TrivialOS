@@ -24,8 +24,8 @@
 // 2GB
 // #define PAGEFILE_PAGES ((1) << (19))
 
-// 8MB
-#define PAGEFILE_PAGES ((1) << (11))
+// 32MB
+#define PAGEFILE_PAGES ((1) << (13))
 
 typedef struct pte pte_t;
 typedef struct pde pde_t;

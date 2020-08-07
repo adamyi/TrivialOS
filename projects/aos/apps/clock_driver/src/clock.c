@@ -34,6 +34,7 @@ struct timer {
 };
 
 static struct timer *timer_heap[MAX_TIMER_ID + 1];
+static bool timer_inused[MAX_TIMER_ID];
 
 static struct {
     volatile meson_timer_reg_t *regs;
@@ -90,7 +91,7 @@ int start_timer(unsigned char *timer_vaddr)
     clock.regs = (meson_timer_reg_t *)(timer_vaddr + TIMER_REG_START);
 
     heap_init(&(clock.timer_queue), timer_heap, MAX_TIMER_ID, compareTimer);
-    rid_init(&(clock.timer_ids), MAX_TIMER_ID, 1);
+    rid_init(&(clock.timer_ids), timer_inused, MAX_TIMER_ID, 1);
 
     configure_timestamp(clock.regs, TIMESTAMP_TIMEBASE_1_US);
     timer_enabled = true;
