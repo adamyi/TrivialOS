@@ -28,7 +28,7 @@
 #define MAX_TIMER_ID 10
 
 typedef uint64_t timestamp_t;
-typedef void (*timer_callback_t)(uint32_t id, void *data1, void *data2);
+typedef void (*timer_callback_t)(uint32_t id, seL4_Word data1, seL4_Word data2);
 
 
 /*
@@ -53,7 +53,7 @@ timestamp_t get_time(void);
  * @param data      Custom data to be passed to callback function
  * @return          0 on failure, otherwise an unique ID for this timeout
  */
-uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data1, void *data2);
+uint32_t register_timer(uint64_t delay, timer_callback_t callback, seL4_Word data1, seL4_Word data2);
 
 /**
  * Remove a previously registered callback by its ID

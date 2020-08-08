@@ -18,8 +18,6 @@
 #define PTE_BITS (12)
 #define PTE_SIZE ((1)<<(PTE_BITS))
 
-#define MAX_DEVICE_MAP 10
-
 typedef struct process process_t;
 
 typedef enum {

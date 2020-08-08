@@ -24,6 +24,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <unistd.h>
 #include <sel4/sel4.h>
 #include <syscalls.h>
 #include <sys/mman.h>

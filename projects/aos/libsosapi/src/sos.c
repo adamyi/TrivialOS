@@ -50,7 +50,7 @@ static int unimplemented_syscall() {
 int sos_sys_open(const char *path, fmode_t mode)
 {
     seL4_SetMR(0, SYSCALL_NO_OPEN);
-    seL4_SetMR(1, path);
+    seL4_SetMR(1, (seL4_Word) path);
     seL4_SetMR(2, strlen(path));
     seL4_SetMR(3, mode);
     // seL4_SetMR(3, 0);
@@ -70,7 +70,7 @@ int sos_sys_read(int file, char *buf, size_t nbyte)
 {
     seL4_SetMR(0, SYSCALL_NO_READ);
     seL4_SetMR(1, file);
-    seL4_SetMR(2, buf);
+    seL4_SetMR(2, (seL4_Word) buf);
     seL4_SetMR(3, nbyte);
     seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 4));
     return seL4_GetMR(0);
@@ -80,7 +80,7 @@ int sos_sys_write(int file, const char *buf, size_t nbyte)
 {
     seL4_SetMR(0, SYSCALL_NO_WRITE);
     seL4_SetMR(1, file);
-    seL4_SetMR(2, buf);
+    seL4_SetMR(2, (seL4_Word) buf);
     seL4_SetMR(3, nbyte);
     seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 4));
     return seL4_GetMR(0);
@@ -90,7 +90,7 @@ int sos_getdirent(int pos, char *name, size_t nbyte)
 {
     seL4_SetMR(0, SYSCALL_NO_GETDIRENT);
     seL4_SetMR(1, pos);
-    seL4_SetMR(2, name);
+    seL4_SetMR(2, (seL4_Word) name);
     seL4_SetMR(3, nbyte);
     seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 4));
     return seL4_GetMR(0);
@@ -99,7 +99,7 @@ int sos_getdirent(int pos, char *name, size_t nbyte)
 int sos_stat(const char *path, sos_stat_t *buf)
 {
     seL4_SetMR(0, SYSCALL_NO_STAT);
-    seL4_SetMR(1, path);
+    seL4_SetMR(1, (seL4_Word) path);
     seL4_SetMR(2, strlen(path));
     seL4_SetMR(3, buf);
     seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 4));
@@ -109,7 +109,7 @@ int sos_stat(const char *path, sos_stat_t *buf)
 pid_t sos_process_create(const char *path)
 {
     seL4_SetMR(0, SYSCALL_NO_PROCESS_CREATE);
-    seL4_SetMR(1, path);
+    seL4_SetMR(1, (seL4_Word) path);
     seL4_SetMR(2, strlen(path));
     seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 3));
     return seL4_GetMR(0);
@@ -117,7 +117,6 @@ pid_t sos_process_create(const char *path)
 
 int sos_process_delete(pid_t pid)
 {
-    printf("sos_process_delete %d\n", pid);
     seL4_SetMR(0, SYSCALL_NO_PROCESS_DELETE);
     seL4_SetMR(1, pid);
     seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 2));
@@ -134,7 +133,7 @@ pid_t sos_my_id(void)
 int sos_process_status(sos_process_t *processes, unsigned max)
 {
     seL4_SetMR(0, SYSCALL_NO_PROCESS_STATUS);
-    seL4_SetMR(1, processes);
+    seL4_SetMR(1, (seL4_Word) processes);
     seL4_SetMR(2, max);
     seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 3));
     return seL4_GetMR(0);
@@ -170,14 +169,12 @@ long sos_sys_brk(uintptr_t newbrk) {
 }
 
 long sos_sys_mmap(uintptr_t vaddr, size_t len, int prot) {
-    printf("mmap %p %d\n", vaddr, len);
     seL4_SetMR(0, SYSCALL_NO_MMAP);
     seL4_SetMR(1, vaddr);
     seL4_SetMR(2, len);
     seL4_SetMR(3, prot);
     seL4_Call(SYSCALL_ENDPOINT_SLOT, seL4_MessageInfo_new(0, 0, 0, 4));
     long res = seL4_GetMR(0);
-    printf("loooooooooooolllllll %p\n", res);
     return res;
 }
 

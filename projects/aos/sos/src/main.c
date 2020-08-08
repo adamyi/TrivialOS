@@ -79,6 +79,7 @@ seL4_CPtr timer_ep;
 seL4_IRQHandler *timer_irq_handler;
 
 typedef void (*timer_callback_t)(uint32_t id, void *data);
+extern pid_t clock_driver_pid;
 
 int timer_irq(
     void *data,
@@ -98,8 +99,8 @@ int timer_irq(
         //printf("w\n");
         seL4_MessageInfo_t msg = seL4_Recv(timer_ep, &badge, reply);
         //printf("wr\n");
-        //printf("%d %d\n", seL4_MessageInfo_get_label(msg), seL4_MessageInfo_get_length(msg));
-        //printf("%lld %d %d %d\n", badge, seL4_GetMR(0), seL4_GetMR(1), seL4_GetMR(2));
+        printf("%d %d\n", seL4_MessageInfo_get_label(msg), seL4_MessageInfo_get_length(msg));
+        printf("%ld %ld %ld %ld\n", badge, seL4_GetMR(0), seL4_GetMR(1), seL4_GetMR(2));
         if (badge & IRQ_EP_BADGE) {
             /* It's a notification from our bound notification
              * object! We can't handle this here since irq handler could potentially block the kernel
@@ -108,14 +109,16 @@ int timer_irq(
             if (++irq_queue_len == MAX_CONCURRENT_IRQS) {
                 ZF_LOGF("too many IRQs in timer_irq routine. Please increase MAX_CONCURRENT_IRQS");
             }
+            printf("queueing irq %ld\n", badge);
             irq_badge_queue[irq_queue_len] = badge;
             continue;
         }
-        if (badge != PID_TO_BADGE(CLOCK_DRIVER_PID)) {
+        if (badge != PID_TO_BADGE(clock_driver_pid)) {
+            printf("badge %ld != clock %ld", badge, PID_TO_BADGE(clock_driver_pid));
             continue;
         }
-        printf("%d %d\n", seL4_MessageInfo_get_label(msg), seL4_MessageInfo_get_length(msg));
-        printf("%lld %d %d %d\n", badge, seL4_GetMR(0), seL4_GetMR(1), seL4_GetMR(2));
+        printf("%ld %ld\n", seL4_MessageInfo_get_label(msg), seL4_MessageInfo_get_length(msg));
+        printf("%ld %ld %ld %ld\n", badge, seL4_GetMR(0), seL4_GetMR(1), seL4_GetMR(2));
         if (seL4_MessageInfo_get_length(msg) == 3) {
             unsigned int id = seL4_GetMR(0);
             timer_callback_t cb = seL4_GetMR(1);

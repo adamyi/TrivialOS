@@ -34,8 +34,7 @@ static rid_t proc_rid;
 static seL4_CPtr ipc_ep;
 static seL4_CPtr timer_ep;
 
-static pid_t clock_driver_pid = -1;
-
+pid_t clock_driver_pid = -1;
 
 extern seL4_CPtr timer_cptr;
 

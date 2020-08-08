@@ -29,7 +29,6 @@
 
 #define PID_TO_BADGE(pid) ((pid)+(100))
 #define BADGE_TO_PID(bad) ((bad)-(100))
-#define CLOCK_DRIVER_PID 1
 
 typedef int pid_t;
 
@@ -98,6 +97,7 @@ seL4_CPtr sched_ctrl_end;
 void process_init();
 
 unsigned get_time();
+bool is_clock_driver_ready();
 
 void kill_process(process_t *proc, coro_t coro);
 pid_t wait_for_process_exit(pid_t pid, process_t *me, coro_t coro);

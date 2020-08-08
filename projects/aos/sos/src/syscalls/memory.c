@@ -73,14 +73,15 @@ IMPLEMENT_SYSCALL(munmap, 2) {
     vaddr_t munmap_end = munmap_start + length;
     if (!(IS_ALIGNED_4K(munmap_start) && IS_ALIGNED_4K(munmap_end))) return return_word(-EINVAL);
     region_t *region = get_region(proc->addrspace->regions, munmap_start);
+    if (region == NULL || region == proc->addrspace->stack || region == proc->addrspace->heap) return return_word(-EINVAL);
     region_t *curr = region;
-    if (region == NULL) return return_word(-EINVAL);
     /* check if we munmap valid address */
     /* if not valid, we don't do anything */
     while (VEND(curr) < munmap_end) {
         printf("region [%p-%p]\n", curr->vbase, VEND(curr));
         curr = curr->next;
-        if (curr == NULL || VEND(curr->prev) != curr->vbase) return return_word(-EINVAL);
+        if (curr == NULL || curr == proc->addrspace->stack || curr == proc->addrspace->heap || VEND(curr->prev) != curr->vbase)
+            return return_word(-EINVAL);
     }
     /* shrink or destroy the region(s) of munmap addr */
     while (curr->next != region) {

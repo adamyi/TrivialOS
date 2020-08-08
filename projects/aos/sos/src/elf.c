@@ -125,7 +125,6 @@ static int load_segment_into_vspace(addrspace_t *as, cspace_t *cspace, process_t
         size_t file_bytes = MIN(segment_bytes, file_size - pos);
         if (pos < file_size) {
             // memcpy(loader_data, src, file_bytes);
-            // TODO
             uio_t myuio;
             if (uio_kinit(&myuio, loader_data, file_bytes, offset, UIO_WRITE)) {
                 ZF_LOGE("can't uio_kinit");

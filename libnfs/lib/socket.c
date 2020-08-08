@@ -171,9 +171,9 @@ rpc_get_fd(struct rpc_context *rpc)
 {
 	assert(rpc->magic == RPC_CONTEXT_MAGIC);
 
-	if (rpc->old_fd) {
+	/*if (rpc->old_fd) {
 		return rpc->old_fd;
-	}
+	}*/
 
 	return rpc->fd;
 }
@@ -593,13 +593,13 @@ rpc_connect_sockaddr_async(struct rpc_context *rpc)
 		return -1;
 	}
 
-	if (rpc->old_fd) {
+	/*if (rpc->old_fd) {
 		if (dup2(rpc->fd, rpc->old_fd) == -1) {
 			return -1;
 		}
 		close(rpc->fd);
 		rpc->fd = rpc->old_fd;
-	}
+	}*/
 
 	/* Some systems allow you to set capabilities on an executable
 	 * to allow the file to be executed with privilege to bind to
@@ -802,7 +802,7 @@ reconnect_cb(struct rpc_context *rpc, int status, void *data _U_,
 
 	rpc->is_connected = 1;
 	rpc->connect_cb   = NULL;
-	rpc->old_fd = 0;
+	// rpc->old_fd = 0;
 }
 
 /* Disconnect but do not error all PDUs, just move pdus in-flight back to the
@@ -827,7 +827,8 @@ rpc_reconnect_requeue(struct rpc_context *rpc)
 	}
 
 	if (rpc->fd != -1) {
-		rpc->old_fd = rpc->fd;
+		// rpc->old_fd = rpc->fd;
+                close(rpc->fd);
 	}
 	rpc->fd  = -1;
 	rpc->is_connected = 0;

@@ -263,6 +263,10 @@ static inline void unalloc_frame_impl(addrspace_t *as, pte_t *pte, cspace_t *csp
             case SHARED_VM:
             // TODO
             break;
+
+            case DEVICE:;
+            /* unmap our pte */
+            assert(seL4_ARM_Page_Unmap(pte->cap) == seL4_NoError);
         }
         pte->inuse = false;
         as->pagecount--;
@@ -403,8 +407,6 @@ int copy_out(cspace_t *cspace, addrspace_t *as, process_t *proc, vaddr_t vaddr, 
     }
     return 0;
 }
-
-static int devicecount = 0;
 
 seL4_Error app_map_device(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr, pte_t *pte, coro_t coro) {
     return map_frame_impl(as, cspace, pte->frame, vaddr, seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, NULL, coro);

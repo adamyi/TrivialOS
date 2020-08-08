@@ -102,12 +102,7 @@ static inline Elf64_Ehdr elf64_getHeader(elf_t *elf)
 
 static inline uintptr_t elf64_getEntryPoint(elf_t *file)
 {
-    printf("elf64_getEntryPoint\n");
     Elf64_Ehdr hdr = elf64_getHeader(file);
-    for (int i = 0; i < sizeof(Elf64_Ehdr); i++) {
-        printf("%x ", *((char *) &hdr + i));
-    }
-    printf("\n");
     return elf64_getHeader(file).e_entry;
 }
 

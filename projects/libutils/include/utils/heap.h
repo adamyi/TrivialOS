@@ -34,4 +34,6 @@ void *heap_peek(heap_t *h);
  */
 void *heap_pop(heap_t *h);
 
+void heap_remove(heap_t *h, void *data);
+
 void heap_destroy(heap_t *h);

@@ -107,7 +107,7 @@ struct rpc_endpoint {
 struct rpc_context {
 	uint32_t magic;
 	int fd;
-	int old_fd;
+	// int old_fd;
 	int is_connected;
 	int is_nonblocking;
 

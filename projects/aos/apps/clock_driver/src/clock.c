@@ -1,5 +1,5 @@
 /*
- * Copyright 2019, Data61
+ * Copy'ight 2019, Data61
  * Commonwealth Scientific and Industrial Research Organisation (CSIRO)
  * ABN 41 687 119 230.
  *
@@ -10,11 +10,13 @@
  * @TAG(DATA61_GPL)
  */
 #include <stdlib.h>
+#include <string.h>
 #include <stdint.h>
 #include <clock/device.h>
 #include <sel4/sel4.h>
 #include <stdbool.h>
 #include <sos.h>
+#include <syscalls.h>
 
 #include "clock.h"
 #include "device.h"
@@ -29,12 +31,12 @@ struct timer {
     timer_callback_t callback;
     timestamp_t trigger_time;
     timestamp_t insert_time;
-    void *data1;
-    void *data2;
+    seL4_Word data1;
+    seL4_Word data2;
 };
 
 static struct timer *timer_heap[MAX_TIMER_ID + 1];
-static bool timer_inused[MAX_TIMER_ID];
+static bool timer_inused[MAX_TIMER_ID + 1];
 
 static struct {
     volatile meson_timer_reg_t *regs;
@@ -90,7 +92,7 @@ int start_timer(unsigned char *timer_vaddr)
 
     clock.regs = (meson_timer_reg_t *)(timer_vaddr + TIMER_REG_START);
 
-    heap_init(&(clock.timer_queue), timer_heap, MAX_TIMER_ID, compareTimer);
+    heap_init(&(clock.timer_queue), (void **) timer_heap, MAX_TIMER_ID, compareTimer);
     rid_init(&(clock.timer_ids), timer_inused, MAX_TIMER_ID, 1);
 
     configure_timestamp(clock.regs, TIMESTAMP_TIMEBASE_1_US);
@@ -135,7 +137,7 @@ static void update_timer() {
     configure_timeout(clock.regs, MESON_TIMER_A, true, false, timebase, remaining_time);
 }
 
-uint32_t register_timer(uint64_t delay, timer_callback_t callback, void *data1, void *data2)
+uint32_t register_timer(uint64_t delay, timer_callback_t callback, seL4_Word data1, seL4_Word data2)
 {
     int id = rid_get_id(&(clock.timer_ids));
     if (id < 0) return 0;
@@ -228,7 +230,7 @@ struct cb {
     seL4_Word data;
 };
 
-void sleep_callback(unsigned int id, void *data1, void *data2) {
+void sleep_callback(unsigned int id, seL4_Word data1, seL4_Word data2) {
     //printf("sleep_callback\n");
     //printf("%d %d %d\n", id, cb->callback, cb->data);
     seL4_DebugPutChar('s');

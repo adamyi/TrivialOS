@@ -19,19 +19,6 @@
 #include <assert.h>
 #include "sos.h"
 
-/*
- * Statically allocated morecore area.
- *
- * This is rather terrible, but is the simplest option without a
- * huge amount of infrastructure.
- */
-#define MORECORE_AREA_BYTE_SIZE 0x100000
-char morecore_area[MORECORE_AREA_BYTE_SIZE];
-
-/* Pointer to free space in the morecore area. */
-static uintptr_t morecore_base = (uintptr_t) &morecore_area;
-static uintptr_t morecore_top = (uintptr_t) &morecore_area[MORECORE_AREA_BYTE_SIZE];
-
 /* Actual morecore implementation
    returns 0 if failure, returns newbrk if success.
 */
@@ -43,8 +30,6 @@ long sys_brk(va_list ap)
     return sos_sys_brk(newbrk);
 }
 
-/* Large mallocs will result in muslc calling mmap, so we do a minimal implementation
-   here to support that. We make a bunch of assumptions in the process */
 long sys_mmap(va_list ap)
 {
     void *addr = va_arg(ap, void *);
@@ -54,24 +39,12 @@ long sys_mmap(va_list ap)
     int fd = va_arg(ap, int);
     off_t offset = va_arg(ap, off_t);
 
-    return sos_sys_mmap(addr, length, prot);
-
-    if (flags & MAP_ANONYMOUS) {
-        /* Check that we don't try and allocate more than exists */
-        if (length > morecore_top - morecore_base) {
-            return -ENOMEM;
-        }
-        /* Steal from the top */
-        morecore_top -= length;
-        return morecore_top;
-    }
-    ZF_LOGF("not implemented");
-    return -ENOMEM;
+    return sos_sys_mmap((uintptr_t) addr, length, prot);
 }
 
 long sys_munmap(va_list ap)
 {
     void *addr = va_arg(ap, void *);
     size_t length = va_arg(ap, size_t);
-    return sos_sys_munmap(addr, length);
+    return sos_sys_munmap((uintptr_t) addr, length);
 }
