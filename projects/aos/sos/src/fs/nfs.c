@@ -170,7 +170,8 @@ int sos_nfs_stat(vnode_t *vnode, char *pathname, sos_stat_t *stat, coro_t me) {
     yield(NULL);
     if (cb_ret.status == 0) {
         stat->st_type  = ((struct nfs_stat_64 *) cb_ret.data)->nfs_mode & 0170000;
-        stat->st_fmode = ((struct nfs_stat_64 *) cb_ret.data)->nfs_mode & 0777;
+        // we only get the owner's permission
+        stat->st_fmode = (((struct nfs_stat_64 *) cb_ret.data)->nfs_mode & 0700) >> 6;
         stat->st_size  = ((struct nfs_stat_64 *) cb_ret.data)->nfs_size;
         stat->st_ctime = ((struct nfs_stat_64 *) cb_ret.data)->nfs_ctime;
         stat->st_atime = ((struct nfs_stat_64 *) cb_ret.data)->nfs_atime;

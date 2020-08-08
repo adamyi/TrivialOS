@@ -4861,6 +4861,9 @@ nfs3_open_cb(struct rpc_context *rpc, int status, void *command_data,
 	}
 
 
+        // disabled permission check because we're doing this in sos file descriptor
+        // otherwise we can't run exec-only elf
+        /*
 	if (res->ACCESS3res_u.resok.access != nfsmode) {
 		nfs_set_error(nfs, "NFS: ACCESS denied. Required "
                               "access %c%c%c. Allowed access %c%c%c",
@@ -4874,6 +4877,7 @@ nfs3_open_cb(struct rpc_context *rpc, int status, void *command_data,
 		free_nfs_cb_data(data);
 		return;
 	}
+        */
 
 	/* Try to truncate it if we were requested to */
 	if ((data->continue_int & O_TRUNC) &&

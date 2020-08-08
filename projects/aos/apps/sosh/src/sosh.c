@@ -60,13 +60,17 @@ size_t sos_read(void *vData, size_t count)
 
 static void prstat(const char *name)
 {
+    char ctimeBuf[18];
+    char atimeBuf[18];
+    strftime(ctimeBuf, 18, "%y/%m/%d %H:%M:%S", localtime(&sbuf.st_ctime));
+    strftime(atimeBuf, 18, "%y/%m/%d %H:%M:%S", localtime(&sbuf.st_atime));
+
     /* print out stat buf */
-    printf("%c%c%c%c 0x%06x 0x%lx 0x%06lx %s\n",
+    printf("%c%c%c%c%10u %s %s %s\n",
            sbuf.st_type == ST_SPECIAL ? 's' : '-',
            sbuf.st_fmode & FM_READ ? 'r' : '-',
            sbuf.st_fmode & FM_WRITE ? 'w' : '-',
-           sbuf.st_fmode & FM_EXEC ? 'x' : '-', sbuf.st_size, sbuf.st_ctime,
-           sbuf.st_atime, name);
+           sbuf.st_fmode & FM_EXEC ? 'x' : '-', sbuf.st_size, ctimeBuf, atimeBuf, name);
 }
 
 static int cat(int argc, char **argv)
