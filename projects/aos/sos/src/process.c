@@ -86,7 +86,7 @@ int get_processes(sos_process_t *processes, int max) {
     if (max <= 0) return 0;
     int count = 0;
     for (int i = 0; i < MAX_PROCS; ++i) {
-        if (runprocs[i].state != PROC_FREE) {
+        if (runprocs[i].state != PROC_FREE && runprocs[i].state != PROC_CREATING) {
             processes->pid = runprocs[i].pid;
             processes->size = runprocs[i].addrspace->pagecount;
             processes->stime = runprocs[i].stime / 1000; // time in msec
@@ -216,7 +216,7 @@ static uintptr_t init_process_stack(process_t *proc, cspace_t *cspace, seL4_CPtr
     cspace_free_slot(cspace, local_stack_cptr);
 
     /* Exend the stack with extra pages */
-    for (int page = 0; page < INITIAL_PROCESS_EXTRA_STACK_PAGES; page++) {
+    /* for (int page = 0; page < INITIAL_PROCESS_EXTRA_STACK_PAGES; page++) {
         stack_top -= PAGE_SIZE_4K;
         err = alloc_map_frame(proc->addrspace, cspace, stack_top,
                               seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, &stack_pte, coro, pinned);
@@ -224,7 +224,7 @@ static uintptr_t init_process_stack(process_t *proc, cspace_t *cspace, seL4_CPtr
             ZF_LOGE("Couldn't allocate additional stack frame");
             return 0;
         }
-    }
+    } */
 
     return stack_bottom;
 }
@@ -260,6 +260,7 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, boo
     process_t *proc = runprocs + (pid % MAX_PROCS);
     proc->pid = pid;
     proc->kill_hook = NULL;
+    proc->state = PROC_CREATING;
 
     /* Create a VSpace */
     proc->vspace_ut = alloc_retype(&(proc->vspace), seL4_ARM_PageGlobalDirectoryObject,
@@ -630,6 +631,7 @@ static void waiting_proc_kill_hook(void *data) {
 }
 
 pid_t wait_for_process_exit(pid_t pid, process_t *me, coro_t coro) {
+    printf("wait_for_process_exit %d\n", pid);
     runqueue_t **queue;
     if (pid == -1) {
         queue = &global_exit_blocked;
@@ -646,12 +648,15 @@ pid_t wait_for_process_exit(pid_t pid, process_t *me, coro_t coro) {
     *queue = rq;
     me->kill_hook = waiting_proc_kill_hook;
     me->kill_hook_data = rq;
+    printf("wait_for_process_exit yield\n");
     void *retpid = yield(NULL);
+    printf("wait_for_process_exit resumed\n");
     me->kill_hook_data = me->kill_hook = NULL;
     return (pid_t) retpid;
 }
 
 static void _delete_process(process_t *proc, coro_t coro) {
+    printf("deleting  proc %d\n", proc->pid);
 
     rid_remove_id(&proc_rid, proc->pid);
 
@@ -693,12 +698,15 @@ static void _delete_process(process_t *proc, coro_t coro) {
 
     if (proc->cspace.root_cnode != seL4_CapNull) cspace_destroy(&(proc->cspace));
 
+    if (restart_clock) start_clock_driver(&cspace, coro);
+
     proc->state = PROC_FREE;
 
-    if (restart_clock) start_clock_driver(&cspace, coro);
+    printf("deleted proc\n");
 }
 
 void kill_process(process_t *proc, coro_t coro) {
+    printf("killing proc %d\n", proc->pid);
     seL4_TCB_Suspend(proc->tcb);
 
     _delete_process(proc, coro);

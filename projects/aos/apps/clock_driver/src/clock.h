@@ -25,7 +25,8 @@
 #define CLOCK_R_FAIL (-3)       /* operation failed for other reason */
 
 
-#define MAX_TIMER_ID 10
+/* this needs to be larger than MAX_PROCS */
+#define MAX_TIMER_ID 32
 
 typedef uint64_t timestamp_t;
 typedef void (*timer_callback_t)(uint32_t id, seL4_Word data1, seL4_Word data2);

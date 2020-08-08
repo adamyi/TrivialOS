@@ -13,19 +13,20 @@
 #define TTY_PRIORITY         (0)
 #define TTY_EP_BADGE         (101)
 
+/* max num of simultaneously-running processes
+ * this can't be too large since we'll run out of sos stack space for coroutine. Increase stack space if you want to increase this. */
 #define MAX_PROCS 20
+/* max possible PID value.
+   once we reach max, we start filling from 1 again (with a simple non-collision hashtable) */
 #define MAX_PID 65535
 
 #define N_NAME 32
-
-/* The number of additional stack pages to provide to the initial
- * process */
-#define INITIAL_PROCESS_EXTRA_STACK_PAGES 4
 
 #define PROC_FREE         0
 #define PROC_RUNNING      1
 #define PROC_BLOCKED      2
 #define PROC_TO_BE_KILLED 3
+#define PROC_CREATING     4
 
 #define PID_TO_BADGE(pid) ((pid)+(100))
 #define BADGE_TO_PID(bad) ((bad)-(100))

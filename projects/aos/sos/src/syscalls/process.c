@@ -35,12 +35,21 @@ IMPLEMENT_SYSCALL(process_delete, 1) {
     printf("Killing process %d\n", pid);
     process_t *check_proc = get_process_by_pid(pid);
     if (check_proc == NULL) return return_error();
-    if (check_proc == proc || check_proc->state == PROC_RUNNING) {
+    if (check_proc == proc) {
         printf("Killing myself\n");
+        kill_process(proc, me);
+        return no_return();
+    } else if (check_proc->state == PROC_RUNNING) {
+        printf("Killing running proc\n");
         kill_process(check_proc, me);
     } else if (check_proc->state == PROC_BLOCKED) {
         check_proc->state = PROC_TO_BE_KILLED;
-        if (check_proc->kill_hook) check_proc->kill_hook(check_proc->kill_hook_data);
+        printf("Set proc to TO_BE_KILLED\n");
+        if (check_proc->kill_hook) {
+            printf("Run kill_hook\n");
+            check_proc->kill_hook(check_proc->kill_hook_data);
+            printf("kill_hook returned\n");
+        }
         wait_for_process_exit(pid, proc, me);
     }
     return return_word(0);

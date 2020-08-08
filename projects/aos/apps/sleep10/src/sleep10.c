@@ -39,7 +39,11 @@ int main(void)
 
     int pid = sos_my_id();
 
-    printf("tty_test: hello from %d\n", pid);
+    printf("sleep10: hello from %d, i'm gonna sleep for 10 sec and die\n", pid);
+
+    sleep(10);
+
+    printf("sleep10: bye from %d\n", pid);
 
     exit(0);
 

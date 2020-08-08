@@ -26,6 +26,15 @@
 
 #define ALLOWED_VARIANCE 10000
 
+void myprintf(const char *fmt, ...) {
+    char buffer[100];
+    va_list vl;
+    va_start(vl, fmt);
+    vsnprintf(buffer, 100, fmt, vl);
+    va_end(vl);
+    for (char *x = buffer; *x; x++) seL4_DebugPutChar(*x);
+}
+
 struct timer {
     uint32_t id;
     timer_callback_t callback;
@@ -158,7 +167,7 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, seL4_Word dat
 
     seL4_DebugPutChar('L');
 
-    // printf("registered %u\n", id);
+    myprintf("registered timer %p (%u), len %d\n", timer, timer->id, heap_length(&(clock.timer_queue)));
 
     return id;
 }
@@ -167,7 +176,6 @@ int remove_timer(uint32_t id)
 {
     heap_remove(&(clock.timer_queue), timers + id);
     rid_remove_id(&(clock.timer_ids), id);
-    // TODO: do we need to free data?
 
     update_timer();
 
@@ -184,7 +192,7 @@ int timer_irq() {
     timestamp_t c = get_time();
     int i = 0;
     while(timer != NULL && get_time() >= timer->trigger_time - ALLOWED_VARIANCE) {
-        // printf("timer %p (%u), len %d\n", timer, timer->id, heap_length(&(clock.timer_queue)));
+        myprintf("timer %p (%u), len %d\n", timer, timer->id, heap_length(&(clock.timer_queue)));
         seL4_DebugPutChar('A');
         heap_remove(&(clock.timer_queue), timer);
         seL4_DebugPutChar('B');
@@ -249,7 +257,7 @@ void sleep_callback(unsigned int id, seL4_Word data1, seL4_Word data2) {
 
 int main(void) {
     sosapi_init_syscall_table();
-    printf("Clock driver starting...\n");
+    myprintf("Clock driver starting...\n");
     start_timer((unsigned char *)0xC000000000);
     while(1) {
         seL4_DebugPutChar('l');
@@ -267,15 +275,20 @@ int main(void) {
         seL4_DebugPutChar('0' + seL4_MessageInfo_get_length(message));
         seL4_DebugPutChar('\n');
         switch (seL4_MessageInfo_get_length(message)) {
-            case 0:
+            case 0: // get timestamp
             seL4_SetMR(0, get_time());
             seL4_Send(3, seL4_MessageInfo_new(0, 0, 0, 1));
             break;
-            case 1:
+            case 1: // irq handler
             timer_irq();
             break;
-            case 3:;
-            register_timer(seL4_GetMR(0), sleep_callback, seL4_GetMR(1), seL4_GetMR(2));
+            case 2: // delete timeout
+            remove_timer(seL4_GetMR(0));
+            seL4_Send(3, seL4_MessageInfo_new(0, 0, 0, 0));
+            break;
+            case 3:; // register timeout
+            seL4_SetMR(0, register_timer(seL4_GetMR(0), sleep_callback, seL4_GetMR(1), seL4_GetMR(2)));
+            seL4_Send(3, seL4_MessageInfo_new(0, 0, 0, 1));
             break;
         }
     }
