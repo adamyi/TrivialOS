@@ -56,7 +56,6 @@ add_executable(
     archive.o
     src/sos.lds
     src/utils.c
-    src/threads.c
     src/process.c
     src/vm/addrspace.c
     src/vm/frame_table.c

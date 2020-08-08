@@ -13,7 +13,6 @@
 #include "vmem_layout.h"
 #include "vm/frame_table.h"
 #include "mapping.h"
-#include "threads.h"
 #include "ut.h"
 #include "utils.h"
 #include "vfs/file.h"

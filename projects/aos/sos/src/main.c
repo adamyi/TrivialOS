@@ -39,7 +39,6 @@
 #include "syscalls.h"
 #include "tests.h"
 #include "utils.h"
-#include "threads.h"
 #include "process.h"
 #include "syscalls/syscall.h"
 #include "fs/console.h"
@@ -308,7 +307,6 @@ NORETURN void *main_continued(UNUSED void *arg)
     console_init();
 
     printf("\nSOS entering syscall loop\n");
-    init_threads(ipc_ep, sched_ctrl_start, sched_ctrl_end);
     syscall_loop(ipc_ep);
 }
 
