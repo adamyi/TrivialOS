@@ -14,10 +14,13 @@ cmake_minimum_required(VERSION 3.7.2)
 # add apps
 add_subdirectory(apps/tty_test)
 add_subdirectory(apps/mem_test)
+add_subdirectory(apps/rdonly_test)
+add_subdirectory(apps/nx_test)
 add_subdirectory(apps/forkbomb)
 add_subdirectory(apps/sleep10)
 add_subdirectory(apps/tick)
 add_subdirectory(apps/sosh)
+add_subdirectory(apps/original_sosh)
 add_subdirectory(apps/clock_driver)
 # add any additional apps here
 

@@ -8,7 +8,6 @@ static list_t *device_list = NULL;
 static vnode_t *rootfs = NULL;
 
 void register_device(char *device, vnode_t *vn) {
-    printf("device_list %p\n", device_list);
     if (device_list == NULL) {
         device_list = malloc(sizeof(list_t));
         device_list->head = NULL;
@@ -20,9 +19,6 @@ void register_device(char *device, vnode_t *vn) {
     //memcpy(n->name, device, strlen(device) + 1);
     n->name = device;
     n->vn = vn;
-    printf("device_list->head %p\n", device_list->head);
-    if (device_list->head) 
-    printf("device_list->head->next %p\n", device_list->head->next);
     list_append(device_list, n);
 }
 
@@ -52,7 +48,6 @@ void vnode_check(vnode_t *vn, const char *opstr) {
     if (vn == NULL) ZF_LOGF("vnode is NULL?!?");
     if (vn->ops == NULL) ZF_LOGF("ops ptr is NULL?!?");
     if (vn->refcount < 0) ZF_LOGF("Refcount is negative? Help!");
-    // printf("check ok\n");
 }
 
 void vnode_cleanup(vnode_t *vn) {

@@ -30,33 +30,21 @@ struct vm_fault_handler_args {
     coro_t coro;
 };
 
-bool ensure_mapping(cspace_t *cspace, void *vaddr, process_t *proc, addrspace_t *as, coro_t coro) {
-    region_t *region;
-
-    /* check if it's a stack extension first */
-    assert(as->stack->prev != NULL);
-    if (VEND(as->stack->prev) <= vaddr && vaddr < as->stack->vbase) {
-        as->stack->memsize += as->stack->vbase - (vaddr_t) vaddr;
-        as->stack->vbase = vaddr; // it's already aligned :)
-        region = as->stack; // optimization: we know it's the stack so we don't need to call get_region. O(1) instead of O(n)
-    } else {
-        printf("%p\n", vaddr);
-        region = get_region(as->regions, (vaddr_t) vaddr);
-        if (region == NULL) {
-            region = as->regions;
-            while (region != NULL) {
-                ZF_LOGE("%p - %p", region->vbase, region->vbase + region->memsize);
-                region = region->next;
-            }
-            ZF_LOGE("VM Fault ...  did you overflow your buffer again?!?");
-            return false;
+bool ensure_mapping(cspace_t *cspace, void *vaddr, process_t *proc, addrspace_t *as, coro_t coro, region_t **mapped_region, pte_t **mapped_pte) {
+    region_t *region = get_region_with_possible_stack_extension(as, vaddr);
+    if (region == NULL) {
+        region = as->regions;
+        ZF_LOGE("VM Fault ...  did you overflow your buffer again?!? Here's your region list:");
+        while (region != NULL) {
+            ZF_LOGE("%p - %p", region->vbase, region->vbase + region->memsize);
+            region = region->next;
         }
+        return false;
     }
 
     vaddr = PAGE_ALIGN_4K((vaddr_t) vaddr);
 
     pte_t *pte = get_pte(as, (vaddr_t) vaddr, false, NULL);
-    printf("%p\n", pte);
 
     if (pte == NULL) {
         /* Alloc frame */
@@ -78,12 +66,11 @@ bool ensure_mapping(cspace_t *cspace, void *vaddr, process_t *proc, addrspace_t 
             case PAGING_OUT:
             proc->paging_coro = coro;
             pte->frame = currproc->pid;
-            printf("paging out coro: %p\n", coro);
             yield(NULL);
             proc->paging_coro = NULL;
             // i think we can directly fallthrough to PAGED_OUT case here
             // but to be on the safe side, we check everything again :)
-            return ensure_mapping(cspace, vaddr, proc, as, coro);
+            return ensure_mapping(cspace, vaddr, proc, as, coro, mapped_region, mapped_pte);
             case PAGED_OUT:;
             size_t pfidx = pte->frame;
             seL4_Error err = alloc_map_frame(as, cspace, (vaddr_t) vaddr, region->rights, region->attrs, NULL, coro, false);
@@ -96,7 +83,6 @@ bool ensure_mapping(cspace_t *cspace, void *vaddr, process_t *proc, addrspace_t 
                     ZF_LOGE("Failed to pagein");
                     return false;
                 }
-                printf("frame %d pfidx %d pte %p\n", pte->frame, pfidx, pte);
                 pte->type = IN_MEM;
                 set_frame_pte(pte->frame, pte);
             }
@@ -113,6 +99,8 @@ bool ensure_mapping(cspace_t *cspace, void *vaddr, process_t *proc, addrspace_t 
             break;
         }
     }
+    if (mapped_region) *mapped_region = region;
+    if (mapped_pte) *mapped_pte = pte;
     return true;
 }
 
@@ -127,13 +115,12 @@ void *_handle_vm_fault_impl(void *args) {
     coro_t coro = vmargs->coro;
     bool kill = false;
 
-    // printf("tttttttttttt VM Fault Type %lx\n", type);
     /* Check permisison fault on page */
     if (is_perm_fault(type)) {
         ZF_LOGE("Permission fault on page");
         kill = true;
     } else {
-        kill = !ensure_mapping(cspace, vaddr, curr, curr->addrspace, coro);
+        kill = !ensure_mapping(cspace, vaddr, curr, curr->addrspace, coro, NULL, NULL);
     }
 
     if (kill || curr->state == PROC_TO_BE_KILLED) {
@@ -181,5 +168,5 @@ void handle_fault_kill(process_t *proc) {
         .proc = proc,
         .coro = c,
     };
-    resume(c, proc);
+    resume(c, &args);
 }

@@ -45,50 +45,52 @@ IMPLEMENT_SYSCALL(mmap, 3) {
         while (curr->next != NULL) curr = curr->next;
         vaddr = VEND(curr);
     }
-    printf("mmap vaddrr %p\n", vaddr);
     size_t memsize = seL4_GetMR(2);
-    printf("mmap memsize %d\n", memsize);
     int prot = seL4_GetMR(3);
     seL4_ARM_VMAttributes attr = seL4_ARM_Default_VMAttributes;
     if (!(prot & PROT_EXEC)) attr |= seL4_ARM_ExecuteNever;
     seL4_CapRights_t rights = get_sel4_rights_from_prot(prot);
-    int result = as_define_region(proc->addrspace, vaddr, memsize, rights, attr, NULL);
-    printf("define region returns %d\n", result);
+    region_t *r;
+    int result = as_define_region(proc->addrspace, vaddr, memsize, rights, attr, &r);
     if (result != 0) return return_word(NULL);
-    printf("mmap region list: ");
+    r->mmaped = true;
+    /*printf("mmap region list: ");
     region_t *region = proc->addrspace->regions;
     while (region != NULL) {
         printf("%p - %p\n", region->vbase, region->vbase + region->memsize);
         region = region->next;
     }
-    printf("\n");
+    printf("\n");*/
     return return_word(vaddr);
 }
 
 IMPLEMENT_SYSCALL(munmap, 2) {
     vaddr_t munmap_start = seL4_GetMR(1);
     size_t length = seL4_GetMR(2);
-    printf("munmap munmap_start %p, %d\n", munmap_start, length);
+    // printf("munmap munmap_start %p, %d\n", munmap_start, length);
     if (length == 0) return return_word(0);
     vaddr_t munmap_end = munmap_start + length;
     if (!(IS_ALIGNED_4K(munmap_start) && IS_ALIGNED_4K(munmap_end))) return return_word(-EINVAL);
     region_t *region = get_region(proc->addrspace->regions, munmap_start);
-    if (region == NULL || region == proc->addrspace->stack || region == proc->addrspace->heap) return return_word(-EINVAL);
+    if (region == NULL || !(region->mmaped)) return return_word(-EINVAL);
     region_t *curr = region;
     /* check if we munmap valid address */
     /* if not valid, we don't do anything */
     while (VEND(curr) < munmap_end) {
-        printf("region [%p-%p]\n", curr->vbase, VEND(curr));
+        // printf("region [%p-%p]\n", curr->vbase, VEND(curr));
         curr = curr->next;
-        if (curr == NULL || curr == proc->addrspace->stack || curr == proc->addrspace->heap || VEND(curr->prev) != curr->vbase)
+        if (curr == NULL || !(curr->mmaped) || VEND(curr->prev) != curr->vbase)
             return return_word(-EINVAL);
     }
     /* shrink or destroy the region(s) of munmap addr */
     while (curr->next != region) {
         size_t vend = VEND(region);
         if (munmap_start > region->vbase && munmap_end < vend) {
+            region_t *r;
             as_shrink_region(proc->addrspace, cspace, region, region->vbase, munmap_start - region->vbase, false, me);
-            as_define_region(proc->addrspace, munmap_end, vend - munmap_end, region->rights, region->attrs, NULL);
+            int err = as_define_region(proc->addrspace, munmap_end, vend - munmap_end, region->rights, region->attrs, &r);
+            if (err) return return_word(-EINVAL);
+            r->mmaped = true;
             break;
         }
         vaddr_t keep_start, keep_end;
@@ -108,31 +110,31 @@ IMPLEMENT_SYSCALL(munmap, 2) {
         }
         region_t *shrink = region;
         region = region->next;
-        printf("before shrink: ");
+        /*printf("before shrink: ");
         region_t *_region = proc->addrspace->regions;
         while (_region != NULL) {
             printf("%p - %p [%p]\n", _region->vbase, _region->vbase + _region->memsize, _region);
             _region = _region->next;
-        }
+        }*/
         as_shrink_region(proc->addrspace, cspace, shrink, keep_start, keep_end - keep_start, false, me);
-        printf("after shrink: ");
+        /*printf("after shrink: ");
         _region = proc->addrspace->regions;
         while (_region != NULL) {
             printf("%p - %p [%p]\n", _region->vbase, _region->vbase + _region->memsize, _region);
             _region = _region->next;
-        }
+        }*/
     }
     /* unallocate frames of munmap region */
     for (vaddr_t start = munmap_start; start < munmap_end; start += PAGE_SIZE_4K) {
         unalloc_frame(proc->addrspace, cspace, start, me);
     }
 
-    printf("munmap region list: ");
+    /*printf("munmap region list: ");
     region = proc->addrspace->regions;
     while (region != NULL) {
         printf("%p - %p\n", region->vbase, region->vbase + region->memsize);
         region = region->next;
     }
-    printf("\n");
+    printf("\n");*/
     return return_word(0);
 }

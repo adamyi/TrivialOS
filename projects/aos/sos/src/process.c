@@ -43,9 +43,7 @@ bool is_clock_driver_ready() {
 
 unsigned get_time() {
     if (is_clock_driver_ready()) {
-        printf("calling timer_ep\n");
         seL4_Call(timer_ep, seL4_MessageInfo_new(0, 0, 0, 0));
-        printf("called timer_ep\n");
         return seL4_GetMR(0);
     }
     /* if clock driver gets killed, we auto-respawn it */
@@ -125,7 +123,7 @@ static uintptr_t init_process_stack(process_t *proc, cspace_t *cspace, seL4_CPtr
         ZF_LOGE("could not find syscall table for c library");
         return 0;
     }
-    printf("sysinfo: %p\n", sysinfo);
+    ZF_LOGD("vsyscall table: %p", sysinfo);
 
     int err = as_define_stack(proc->addrspace, PROCESS_STACK_BOTTOM, PAGE_SIZE_4K);
     if (err) {
@@ -240,21 +238,17 @@ static void _delete_process(process_t *proc, coro_t coro);
 /* Start process, and return pid if successful
  */
 pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, bool pinned, coro_t coro) {
-    printf("ccccc\n");
     sos_stat_t file_stat;
     if (vfs_stat(app_name, &file_stat, coro) < 0) {
         ZF_LOGE("file not exist");
         return -1;
     }
-    printf("ccccc\n");
     if (!(file_stat.st_fmode & FM_EXEC)) {
         ZF_LOGE("ok russian hacker, it's not executable");
         return -1;
     }
-    printf("aaaaaaaaaaaa\n");
 
     pid_t pid = get_next_pid();
-    printf("get_next_pid: %d\n", pid);
     if (pid == -1) return -1;
 
     process_t *proc = runprocs + (pid % MAX_PROCS);
@@ -271,7 +265,6 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, boo
         return -1;
     }
 
-    printf("aaaaaaaaaaaa\n");
     /* assign the vspace to an asid pool */
     seL4_Word err = seL4_ARM_ASIDPool_Assign(seL4_CapInitThreadASIDPool, proc->vspace);
     if (err != seL4_NoError) {
@@ -280,7 +273,6 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, boo
         return -1;
     }
 
-    printf("aaaaaaaaaaaa\n");
     /* Create a simple 1 level CSpace */
     err = cspace_create_one_level(cspace, &(proc->cspace));
     if (err != CSPACE_NOERROR) {
@@ -289,7 +281,6 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, boo
         return -1;
     }
 
-    printf("aaaaaaaaaaaa\n");
     /* Create an as */
     proc->addrspace = as_create(proc->vspace, coro);
     if (proc->addrspace == NULL) {
@@ -298,7 +289,6 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, boo
         return -1;
     }
 
-    printf("aaaaaaaaaaaa\n");
     /* Create an IPC buffer */
     err = as_define_region(proc->addrspace, PROCESS_IPC_BUFFER, PAGE_SIZE_4K, seL4_AllRights,
                 seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, NULL);
@@ -308,17 +298,16 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, boo
         return -1;
     }
 
-    printf("aaaaaaaaaaaa\n");
     /* Create an IPC frame */
+    pte_t ipc_buffer;
     err = alloc_map_frame(proc->addrspace, cspace, PROCESS_IPC_BUFFER,
-                                        seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, &(proc->ipc_buffer), coro, pinned);
+                                        seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, &ipc_buffer, coro, pinned);
     if (err) {
         ZF_LOGE("Failed to alloc map IPC frame");
         _delete_process(proc, coro);
         return -1;
     }
 
-    printf("aaaaaaaaaaaa\n");
     /* allocate a new slot in the target cspace which we will mint a badged endpoint cap into --
      * the badge is used to identify the process, which will come in handy when you have multiple
      * processes. */
@@ -329,7 +318,6 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, boo
         return -1;
     }
 
-    printf("aaaaaaaaaaaa\n");
     /* now mutate the cap, thereby setting the badge */
     err = cspace_mint(&(proc->cspace), user_ep, cspace, ipc_ep, seL4_AllRights, PID_TO_BADGE(proc->pid));
     if (err) {
@@ -338,7 +326,6 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, boo
         return -1;
     }
 
-    printf("aaaaaaaaaaaa\n");
     /* Create a new TCB object */
     proc->tcb_ut = alloc_retype(&(proc->tcb), seL4_TCBObject, seL4_TCBBits);
     if (proc->tcb_ut == NULL) {
@@ -347,19 +334,17 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, boo
         return -1;
     }
 
-    printf("aaaaaaaaaaaa\n");
     /* Configure the TCB */
     err = seL4_TCB_Configure(proc->tcb,
                              proc->cspace.root_cnode, seL4_NilData,
                              proc->vspace, seL4_NilData, PROCESS_IPC_BUFFER,
-                             proc->ipc_buffer.cap);
+                             ipc_buffer.cap);
     if (err != seL4_NoError) {
         ZF_LOGE("Unable to configure new TCB");
         _delete_process(proc, coro);
         return -1;
     }
 
-    printf("aaaaaaaaaaaa\n");
     /* Create scheduling context */
     proc->sched_context_ut = alloc_retype(&(proc->sched_context), seL4_SchedContextObject,
                                                      seL4_MinSchedContextBits);
@@ -369,7 +354,6 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, boo
         return -1;
     }
 
-    printf("aaaaaaaaaaaa\n");
     /* Configure the scheduling context to use the first core with budget equal to period */
     err = seL4_SchedControl_Configure(sched_ctrl_start, proc->sched_context, US_IN_MS, US_IN_MS, 0, 0);
     if (err != seL4_NoError) {
@@ -388,7 +372,6 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, boo
         return -1;
     }
 
-    printf("aaaaaaaaaaaa\n");
     /* now mutate the cap, thereby setting the badge */
     err = cspace_mint(cspace, proc->kernel_ep, cspace, ipc_ep, seL4_AllRights, PID_TO_BADGE(proc->pid));
     if (err) {
@@ -397,7 +380,6 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, boo
         return -1;
     }
 
-    printf("aaaaaaaaaaaa\n");
     /* bind sched context, set fault endpoint and priority
      * In MCS, fault end point needed here should be in current thread's cspace.
      * NOTE this will use the unbadged ep unlike above, you might want to mint it with a badge
@@ -410,11 +392,9 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, boo
         return -1;
     }
 
-    printf("aaaaaaaaaaaa\n");
     /* Provide a name for the thread -- Helpful for debugging */
     NAME_THREAD(proc->tcb, app_name);
 
-    printf("aaaaaaaaaaaa\n");
     /* parse the cpio image */
     ZF_LOGI("\nStarting \"%s\"...\n", app_name);
 
@@ -459,10 +439,10 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, boo
 
     elf_t elf_file = {};
 
-    for (int i = 0; i < 64; i++) {
+    /*for (int i = 0; i < 64; i++) {
         printf("%x ", *((char *)headerbytes+i));
     }
-    printf("\n");
+    printf("\n");*/
 
     /* Ensure that the file is an elf file. */
     /* we only check ELF header and program header table without checking section header table */
@@ -475,7 +455,6 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, boo
         return -1;
     }
 
-    printf("aaaaaaaaaaaa\n");
     /* set up the stack */
     seL4_Word sp = init_process_stack(proc, cspace, seL4_CapInitThreadVSpace, &elf_file, elf_vnode, coro, pinned);
     if (sp == 0) {
@@ -489,7 +468,6 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, boo
 
     vaddr_t heap_start;
 
-    printf("aaaaaaaaaaaa\n");
     /* load the elf image from NFS*/
     err = elf_load(cspace, proc, proc->vspace, &elf_file, elf_vnode, proc->addrspace, &heap_start, pinned, coro);
     if (err) {
@@ -506,7 +484,6 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, boo
     free_frame(headerframe);
     vfs_close(elf_vnode, coro);
 
-    printf("aaaaaaaaaaaa\n");
     /* set up the heap */
     err = as_define_heap(proc->addrspace, heap_start);
     if (err) {
@@ -515,17 +492,6 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, boo
         return -1;
     }
 
-    printf("aaaaaaaaaaaa\n");
-    /* Map in the IPC buffer for the thread */
-    /*err = sos_map_frame(proc->addrspace, cspace, proc->ipc_buffer.frame, PROCESS_IPC_BUFFER,
-                    seL4_AllRights, seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, NULL, coro);
-    if (err != 0) {
-        ZF_LOGE("Unable to map IPC buffer for user app");
-        _delete_process(proc, coro);
-        return -1;
-    }*/
-
-    printf("aaaaaaaaaaaa\n");
     fdtable_init(&proc->fdt, coro);
 
     if (hook) {
@@ -537,7 +503,6 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, boo
         }
     }
 
-    printf("aaaaaaaaaaaa\n");
     /* Start the new process */
     seL4_UserContext context = {
         .pc = entrypoint,
@@ -548,7 +513,9 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, boo
     proc->command[N_NAME - 1] = '\0';
     proc->exit_blocked = NULL;
 
-    printf("Starting %s at %p\n", app_name, (void *) context.pc);
+    ZF_LOGE("Starting %s at %p", app_name, (void *) context.pc);
+    proc->stime = get_time();
+    proc->state = PROC_RUNNING;
     err = seL4_TCB_WriteRegisters(proc->tcb, 1, 0, 2, &context);
     if (err != seL4_NoError) {
         // free everything
@@ -556,15 +523,11 @@ pid_t start_process(cspace_t *cspace, char *app_name, proc_create_hook hook, boo
         _delete_process(proc, coro);
         return -1;
     }
-    printf("get time\n");
-    proc->stime = get_time();
-    printf("get time finish\n");
-    proc->state = PROC_RUNNING;
     return proc->pid;
 }
 
 seL4_Error clock_hook(process_t *proc, coro_t coro) {
-    seL4_Error err = as_define_region(proc->addrspace, PROCESS_VMEM_START, PAGE_SIZE_4K, seL4_AllRights,
+    seL4_Error err = as_define_region(proc->addrspace, CLOCK_DRIVER_ADDR, PAGE_SIZE_4K, seL4_AllRights,
                 seL4_ARM_Default_VMAttributes | seL4_ARM_ExecuteNever, NULL);
     if (err) return err;
     seL4_CPtr user_ep = cspace_alloc_slot(&(proc->cspace));
@@ -576,7 +539,7 @@ seL4_Error clock_hook(process_t *proc, coro_t coro) {
     if (reply_obj == seL4_CapNull) return seL4_NotEnoughMemory;
     err = cspace_untyped_retype(&(proc->cspace), reply_ut->cap, reply_obj, seL4_ReplyObject, seL4_ReplyBits);
     if (err) return err;
-    return sos_clone_and_map_device_frame(proc->addrspace, &cspace, timer_cptr, PROCESS_VMEM_START, coro);
+    return sos_clone_and_map_device_frame(proc->addrspace, &cspace, timer_cptr, CLOCK_DRIVER_ADDR, coro);
 }
 
 static void start_clock_driver(cspace_t *cspace, coro_t coro) {
@@ -609,13 +572,13 @@ bool start_first_process(cspace_t *cspace, char *app_name, seL4_CPtr _ipc_ep, se
 
 static void exhaust_runqueue(runqueue_t **queue, pid_t pid) {
     while (*queue != NULL) {
-        printf("exhaust_runqueue: resume %p", (*queue)->coro);
+        ZF_LOGD("exhaust_runqueue: resume %p", (*queue)->coro);
         if ((*queue)->coro) resume((*queue)->coro, pid);
         runqueue_t *last = *queue;
         *queue = (*queue)->next;
         free(last);
     }
-    printf("exhaust_runqueue finish\n");
+    ZF_LOGD("exhaust_runqueue finish");
 }
 
 struct kill_hook_data {
@@ -631,7 +594,7 @@ static void waiting_proc_kill_hook(void *data) {
 }
 
 pid_t wait_for_process_exit(pid_t pid, process_t *me, coro_t coro) {
-    printf("wait_for_process_exit %d\n", pid);
+    ZF_LOGD("wait_for_process_exit %d", pid);
     runqueue_t **queue;
     if (pid == -1) {
         queue = &global_exit_blocked;
@@ -648,15 +611,13 @@ pid_t wait_for_process_exit(pid_t pid, process_t *me, coro_t coro) {
     *queue = rq;
     me->kill_hook = waiting_proc_kill_hook;
     me->kill_hook_data = rq;
-    printf("wait_for_process_exit yield\n");
     void *retpid = yield(NULL);
-    printf("wait_for_process_exit resumed\n");
     me->kill_hook_data = me->kill_hook = NULL;
     return (pid_t) retpid;
 }
 
 static void _delete_process(process_t *proc, coro_t coro) {
-    printf("deleting  proc %d\n", proc->pid);
+    ZF_LOGD("deleting proc %d", proc->pid);
 
     rid_remove_id(&proc_rid, proc->pid);
 
@@ -669,9 +630,7 @@ static void _delete_process(process_t *proc, coro_t coro) {
     // this is safe to call if everything is null
     fdtable_destroy(&(proc->fdt), coro);
 
-    printf("before as_destroy\n");
     if (proc->addrspace) as_destroy(proc->addrspace, &cspace, coro);
-    printf("after as_destroy\n");
 
     if (proc->tcb) {
         cspace_delete(&cspace, proc->tcb);
@@ -701,12 +660,10 @@ static void _delete_process(process_t *proc, coro_t coro) {
     if (restart_clock) start_clock_driver(&cspace, coro);
 
     proc->state = PROC_FREE;
-
-    printf("deleted proc\n");
 }
 
 void kill_process(process_t *proc, coro_t coro) {
-    printf("killing proc %d\n", proc->pid);
+    ZF_LOGD("killing proc %d", proc->pid);
     seL4_TCB_Suspend(proc->tcb);
 
     _delete_process(proc, coro);

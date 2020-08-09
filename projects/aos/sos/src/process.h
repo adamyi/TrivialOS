@@ -50,34 +50,28 @@ struct runqueue {
 runqueue_t *global_exit_blocked;
 
 struct process {
-    pid_t pid;
-    unsigned stime;
-    char command[N_NAME];
-    char state;
+    pid_t pid;                     /* process id */
+    unsigned stime;                /* starting timestamp */
+    char command[N_NAME];          /* process filename */
+    char state;                    /* process running state (PROC_FREE, PROC_RUNNING, PROC_BLOCKED, PROC_TO_BE_KILLED, PROC_CREATING) */
 
-    ut_t *tcb_ut;
-    seL4_CPtr tcb;
-    ut_t *vspace_ut;
-    seL4_CPtr vspace;
+    ut_t *tcb_ut;                  /* untyped memory for TCB */
+    seL4_CPtr tcb;                 /* cptr for TCB */
+    ut_t *vspace_ut;               /* untyped memory for vspace */
+    seL4_CPtr vspace;              /* cptr for vspace */
+    ut_t *sched_context_ut;        /* untyped memory for scheduling context */
+    seL4_CPtr sched_context;       /* cptr for scheduling context */
+    seL4_CPtr kernel_ep;           /* cptr for badged ep in kernel cspace */
 
-    pte_t ipc_buffer;
+    cspace_t cspace;               /* process cspace */
+    addrspace_t *addrspace;        /* address space */
+    fdtable_t fdt;                 /* file descriptor table */
 
-    ut_t *sched_context_ut;
-    seL4_CPtr sched_context;
+    runqueue_t *exit_blocked;      /* coroutines to resume upon this process quitting */
+    void (*kill_hook)(void *data); /* hook function to run before killing this process */
+    void *kill_hook_data;          /* data to pass into kill_hook function */
 
-    seL4_CPtr kernel_ep;
-
-    cspace_t cspace;
-    addrspace_t *addrspace;
-
-    runqueue_t *exit_blocked;
-    void (*kill_hook)(void *data);
-    void *kill_hook_data;
-
-    coro_t paging_coro;
-
-    fdtable_t fdt;
-
+    coro_t paging_coro;            /* if blocked by nfs paging, the paging coroutine */
 };
 
 typedef seL4_Error (*proc_create_hook)(struct process *proc, coro_t coro);

@@ -86,7 +86,7 @@ static int load_segment_into_vspace(addrspace_t *as, cspace_t *cspace, process_t
 
         pte_t loadee_pte;
  
-        err = alloc_map_frame(as, cspace, loadee_vaddr, permissions, attr, &loadee_pte, coro, pinned);
+        err = alloc_map_frame(as, cspace, loadee_vaddr, permissions, attr, &loadee_pte, coro, true);
 
         /* A frame has already been mapped at this address. This occurs when segments overlap in
          * the same frame, which is permitted by the standard. That's fine as we
@@ -109,9 +109,12 @@ static int load_segment_into_vspace(addrspace_t *as, cspace_t *cspace, process_t
         seL4_CPtr loadee_frame = loadee_pte.cap;
 
         /* finally copy the data */
-        seL4_CPtr lcptr;
         size_t size;
-        unsigned char *loader_data = map_vaddr_to_sos(cspace, as, proc, loadee_vaddr, &lcptr, &size, coro);
+        unsigned char *loader_data = map_vaddr_to_sos(cspace, as, proc, loadee_vaddr, NULL, &size, coro);
+        if (loader_data == NULL) {
+            ZF_LOGE("can't map virtual address (%p) to sos", loadee_vaddr);
+            return -1;
+        }
         *loader_data = 0x88;
 
 
@@ -128,13 +131,13 @@ static int load_segment_into_vspace(addrspace_t *as, cspace_t *cspace, process_t
             uio_t myuio;
             if (uio_kinit(&myuio, loader_data, file_bytes, offset, UIO_WRITE)) {
                 ZF_LOGE("can't uio_kinit");
-                unmap_vaddr_from_sos(cspace, lcptr);
+                unmap_vaddr_from_sos(cspace, loadee_pte);
                 return -1;
             }
             int readbytes = VOP_PREAD(vnode, &myuio, coro);
             if (readbytes != file_bytes) {
                 ZF_LOGE("can't read elf file");
-                unmap_vaddr_from_sos(cspace, lcptr);
+                unmap_vaddr_from_sos(cspace, loadee_pte);
                 return -1;
             }
             uio_destroy(&myuio, NULL);
@@ -148,10 +151,9 @@ static int load_segment_into_vspace(addrspace_t *as, cspace_t *cspace, process_t
         memset(loader_data, 0, trailing_zeroes);
 
         /* Flush the frame contents from loader caches out to memory. */
-        seL4_ARM_Page_Clean_Data(lcptr, 0, BIT(seL4_PageBits));
-        seL4_ARM_Page_Unify_Instruction(lcptr, 0, BIT(seL4_PageBits));
+        flush_frame(loadee_pte.frame);
 
-        unmap_vaddr_from_sos(cspace, lcptr);
+        unmap_vaddr_from_sos(cspace, loadee_pte);
 
         /* Invalidate the caches in the loadee forcing data to be loaded
          * from memory. */
@@ -163,6 +165,8 @@ static int load_segment_into_vspace(addrspace_t *as, cspace_t *cspace, process_t
         pos += segment_bytes;
         dst += segment_bytes;
         offset += segment_bytes;
+
+        if (!pinned) unpin_frame(loadee_pte.frame);
     }
     return 0;
 }
@@ -203,7 +207,6 @@ int elf_load(cspace_t *cspace, process_t *proc, seL4_CPtr loadee_vspace, elf_t *
             return -1;
         }
         if (vaddr + segment_size > *end) *end = vaddr + segment_size;
-        printf("elf load\n");
     }
 
     return 0;
@@ -259,7 +262,7 @@ static int elf32_getSectionNamed_v(elf_t *elfFile, vnode_t *vnode, const char *s
             continue;
         if (strncmp(shrtrtab_data + curr->sh_name, str, strl) == 0) {
             *result = curr->sh_offset;
-            printf("i found coronavirus cure\n");
+            // printf("i found coronavirus cure\n");
             free(sectionTable);
             free(shrtrtab_data);
             return 0;
@@ -320,7 +323,7 @@ static int elf64_getSectionNamed_v(elf_t *elfFile, vnode_t *vnode, const char *s
             continue;
         if (strncmp(shrtrtab_data + curr->sh_name, str, strl) == 0) {
             *result = curr->sh_offset;
-            printf("i found coronavirus cure\n");
+            // printf("i found coronavirus cure\n");
             free(sectionTable);
             free(shrtrtab_data);
             return 0;

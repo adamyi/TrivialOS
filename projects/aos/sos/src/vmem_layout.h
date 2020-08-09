@@ -20,8 +20,6 @@
 #define SOS_SCRATCH          (0xA0000000)
 #define SOS_DEVICE_START     (0xB0000000)
 #define SOS_STACK            (0xC0000000)
-#define SOS_IPC_BUFFER       (0xD0000000)
-#define SOS_SHARED_BUFFER    (0xE0000000)
 #define SOS_STACK_PAGES      100
 #define SOS_UT_TABLE         (0x8000000000)
 #define SOS_FRAME_TABLE      (0x8100000000)
@@ -30,5 +28,6 @@
 
 /* Constants for how SOS will layout the address space of any processes it loads up */
 #define PROCESS_STACK_BOTTOM (0x9000000000)
-#define PROCESS_IPC_BUFFER   (0xA000000000)
-#define PROCESS_VMEM_START   (0xC000000000)
+#define PROCESS_IPC_BUFFER   (0x9000000000)
+
+#define CLOCK_DRIVER_ADDR    (0xC000000000)

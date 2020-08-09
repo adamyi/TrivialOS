@@ -17,38 +17,34 @@ IMPLEMENT_SYSCALL(process_create, 2) {
     if (pathlen > PATH_MAX) {
         return return_word(-ENAMETOOLONG);
     }
-    printf("bbbbb\n");
 
     int err = copy_in(cspace, proc->addrspace, proc, pathname_ptr, pathlen, pathname, me);
     if (err) return return_word(-EINVAL);
     pathname[pathlen] = '\0';
-    printf("bbbbb\n");
 
     pid_t pid = start_process(cspace, pathname, NULL, false, me);
-    printf("bbbbb\n");
 
     return return_word(pid);
 }
 
 IMPLEMENT_SYSCALL(process_delete, 1) {
     pid_t pid = seL4_GetMR(1);
-    printf("Killing process %d\n", pid);
+    ZF_LOGI("Killing process %d", pid);
     process_t *check_proc = get_process_by_pid(pid);
     if (check_proc == NULL) return return_error();
     if (check_proc == proc) {
-        printf("Killing myself\n");
+        ZF_LOGD("Killing myself");
         kill_process(proc, me);
         return no_return();
     } else if (check_proc->state == PROC_RUNNING) {
-        printf("Killing running proc\n");
+        ZF_LOGD("Killing running proc");
         kill_process(check_proc, me);
     } else if (check_proc->state == PROC_BLOCKED) {
         check_proc->state = PROC_TO_BE_KILLED;
-        printf("Set proc to TO_BE_KILLED\n");
+        ZF_LOGD("Set proc to TO_BE_KILLED");
         if (check_proc->kill_hook) {
-            printf("Run kill_hook\n");
+            ZF_LOGD("Run kill_hook");
             check_proc->kill_hook(check_proc->kill_hook_data);
-            printf("kill_hook returned\n");
         }
         wait_for_process_exit(pid, proc, me);
     }

@@ -71,22 +71,11 @@ static int compareTimeStamp(timestamp_t a, timestamp_t b) {
 static int compareTimer(void *a, void *b) {
     struct timer *ta = (struct timer *) a;
     struct timer *tb = (struct timer *) b;
-    seL4_DebugPutChar('W');
-    char lol[10];
-    sprintf(lol, "%p", ta);
-    for (int i = 0; i < strlen(lol); ++i) seL4_DebugPutChar(lol[i]);
-    seL4_DebugPutChar('\n');
-    sprintf(lol, "%p", tb);
-    for (int i = 0; i < strlen(lol); ++i) seL4_DebugPutChar(lol[i]);
-    seL4_DebugPutChar('\n');
 
     int res = compareTimeStamp(ta->trigger_time, tb->trigger_time);
-    seL4_DebugPutChar('W');
     if (res != 0) return res;
     res = compareTimeStamp(ta->insert_time, tb->insert_time);
-    seL4_DebugPutChar('W');
     if (res != 0) return res;
-    seL4_DebugPutChar('W');
     return (int) ta->id - (int) tb->id;
 }
 
@@ -161,11 +150,7 @@ uint32_t register_timer(uint64_t delay, timer_callback_t callback, seL4_Word dat
 
     heap_insert(&(clock.timer_queue), timer);
 
-    seL4_DebugPutChar('L');
-
     update_timer();
-
-    seL4_DebugPutChar('L');
 
     myprintf("registered timer %p (%u), len %d\n", timer, timer->id, heap_length(&(clock.timer_queue)));
 
@@ -183,39 +168,18 @@ int remove_timer(uint32_t id)
 }
 
 int timer_irq() {
-    // printf("irq at %lu\n", get_time());
-    seL4_DebugPutChar('i');
-    seL4_DebugPutChar('r');
-    seL4_DebugPutChar('q');
-    seL4_DebugPutChar('\n');
     struct timer *timer = heap_peek(&(clock.timer_queue));
     timestamp_t c = get_time();
     int i = 0;
     while(timer != NULL && get_time() >= timer->trigger_time - ALLOWED_VARIANCE) {
         myprintf("timer %p (%u), len %d\n", timer, timer->id, heap_length(&(clock.timer_queue)));
-        seL4_DebugPutChar('A');
         heap_remove(&(clock.timer_queue), timer);
-        seL4_DebugPutChar('B');
         timer->callback(timer->id, timer->data1, timer->data2);
-        seL4_DebugPutChar('C');
         rid_remove_id(&(clock.timer_ids), timer->id);
-        seL4_DebugPutChar('D');
         timer = heap_peek(&(clock.timer_queue));
-        seL4_DebugPutChar('E');
     }
-    //seL4_SetMR(0, 17);
-    seL4_DebugPutChar('i');
-    seL4_DebugPutChar('r');
-    seL4_DebugPutChar('q');
-    seL4_DebugPutChar('f');
-    seL4_DebugPutChar('\n');
     seL4_Send(2, seL4_MessageInfo_new(0, 0, 0, 0));
     update_timer();
-    seL4_DebugPutChar('i');
-    seL4_DebugPutChar('r');
-    seL4_DebugPutChar('q');
-    seL4_DebugPutChar('r');
-    seL4_DebugPutChar('\n');
 }
 
 int stop_timer(void)
@@ -239,20 +203,10 @@ struct cb {
 };
 
 void sleep_callback(unsigned int id, seL4_Word data1, seL4_Word data2) {
-    //printf("sleep_callback\n");
-    //printf("%d %d %d\n", id, cb->callback, cb->data);
-    seL4_DebugPutChar('s');
-    seL4_DebugPutChar('c');
-    seL4_DebugPutChar('\n');
-    //seL4_SetMR(0, 16);
     seL4_SetMR(0, id);
     seL4_SetMR(1, data1);
     seL4_SetMR(2, data2);
     seL4_Send(2, seL4_MessageInfo_new(0, 0, 0, 3));
-    //printf("sleep_callback called\n");
-    seL4_DebugPutChar('s');
-    seL4_DebugPutChar('d');
-    seL4_DebugPutChar('\n');
 }
 
 int main(void) {
@@ -260,20 +214,8 @@ int main(void) {
     myprintf("Clock driver starting...\n");
     start_timer((unsigned char *)0xC000000000);
     while(1) {
-        seL4_DebugPutChar('l');
-        seL4_DebugPutChar('o');
-        seL4_DebugPutChar('o');
-        seL4_DebugPutChar('p');
-        seL4_DebugPutChar('\n');
-        // printf("test\n");
         seL4_Word badge = 0;
         seL4_MessageInfo_t message = seL4_Recv(2, &badge, 3);
-        // printf("received\n");
-        seL4_DebugPutChar('r');
-        seL4_DebugPutChar('c');
-        seL4_DebugPutChar('v');
-        seL4_DebugPutChar('0' + seL4_MessageInfo_get_length(message));
-        seL4_DebugPutChar('\n');
         switch (seL4_MessageInfo_get_length(message)) {
             case 0: // get timestamp
             seL4_SetMR(0, get_time());

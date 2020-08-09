@@ -186,6 +186,7 @@ seL4_Error sos_map_frame(addrspace_t *as, cspace_t *cspace, frame_ref_t frame_re
         pte->cap = frame_cptr;
         pte->frame = frame_ref;
         pte->inuse = true;
+        pte->mapped = true;
         pte->type = IN_MEM;
         set_frame_pte(frame_ref, pte);
     }
@@ -230,11 +231,11 @@ static inline void unalloc_frame_impl(addrspace_t *as, pte_t *pte, cspace_t *csp
         switch (pte->type) {
             case IN_MEM:;
             /* unmap our pte */
-            seL4_Error err = seL4_ARM_Page_Unmap(pte->cap);
-            assert(err == seL4_NoError);
+            seL4_ARM_Page_Unmap(pte->cap);
+            pte->mapped = false;
 
             /* delete the frame cap */
-            err = cspace_delete(cspace, pte->cap);
+            seL4_Error err = cspace_delete(cspace, pte->cap);
             assert(err == seL4_NoError);
 
             /* mark the slot as free */
@@ -267,6 +268,7 @@ static inline void unalloc_frame_impl(addrspace_t *as, pte_t *pte, cspace_t *csp
             case DEVICE:;
             /* unmap our pte */
             assert(seL4_ARM_Page_Unmap(pte->cap) == seL4_NoError);
+            pte->mapped = false;
         }
         pte->inuse = false;
         as->pagecount--;
@@ -307,7 +309,7 @@ void unalloc_frame(addrspace_t *as, cspace_t *cspace, vaddr_t vaddr, coro_t coro
     unalloc_frame_impl(as, get_pte(as, vaddr, false, NULL), cspace, coro);
 }
 
-void *map_vaddr_to_sos(cspace_t *cspace, addrspace_t *as, process_t *proc, vaddr_t vaddr, seL4_CPtr *local_cptr, size_t *size, coro_t coro) {
+void *map_vaddr_to_sos(cspace_t *cspace, addrspace_t *as, process_t *proc, vaddr_t vaddr, pte_t *ppte, size_t *size, coro_t coro) {
     vaddr_t vbase = PAGE_ALIGN_4K(vaddr);
     size_t offset = vaddr - vbase;
     pte_t *pte = get_pte(as, vbase, true, coro);
@@ -350,41 +352,43 @@ void *map_vaddr_to_sos(cspace_t *cspace, addrspace_t *as, process_t *proc, vaddr
     switch (pte->type) {
         case PAGING_OUT:
         case PAGED_OUT:;
-        if (!ensure_mapping(cspace, (void *) vaddr, proc, as, coro)) {
+        if (!ensure_mapping(cspace, (void *) vaddr, proc, as, coro, NULL, NULL)) {
             ZF_LOGE("Failed ensure_mapping");
             return NULL;
         }
     }
 
+    invalidate_frame(pte->frame);
+
     void *addr = frame_data(pte->frame);
     //printf("%p\n", addr);
 
-    *local_cptr = frame_page(pte->frame);
-
     *size = PAGE_SIZE_4K - offset;
     //ZF_LOGE("mapped %p to %p (page %p, %d till end)", vaddr, addr + offset, addr, *size);
+    if (ppte) *ppte = *pte;
     return addr + offset;
 }
 
-void unmap_vaddr_from_sos(cspace_t *cspace, seL4_CPtr local_cptr) {
-    /* we don't do anything */
+void unmap_vaddr_from_sos(cspace_t *cspace, pte_t pte) {
+    // we don't do anything
 }
 
 int copy_in(cspace_t *cspace, addrspace_t *as, process_t *proc, vaddr_t vaddr, size_t size, void *dest, coro_t coro) {
     size_t rs;
-    seL4_CPtr lc;
+    pte_t lc;
     void *src;
     while (size > 0) {
-        // we don't need to check overflow because regions are aligned
-        // if we overflow, we won't get pte
+        region_t *r = get_region_with_possible_stack_extension(as, vaddr);
+        if (!r) return -1;
+        if (!(seL4_CapRights_get_capAllowRead(r->rights))) return -1;
         src = map_vaddr_to_sos(cspace, as, proc, vaddr, &lc, &rs, coro);
-        //printf("sos addr %p\n", src);
         if (src == NULL) return -1;
         if (size < rs) rs = size;
-        //printf("copying %d bytes from %p to %p\n", rs, src, dest);
+        if (r->memsize < rs) rs = r->memsize;
         memcpy(dest, src, rs);
         size -= rs;
         dest += rs;
+        vaddr += rs;
         unmap_vaddr_from_sos(cspace, lc);
     }
     return 0;
@@ -392,17 +396,23 @@ int copy_in(cspace_t *cspace, addrspace_t *as, process_t *proc, vaddr_t vaddr, s
 
 int copy_out(cspace_t *cspace, addrspace_t *as, process_t *proc, vaddr_t vaddr, size_t size, void *src, coro_t coro) {
     size_t rs;
-    seL4_CPtr lc;
+    pte_t lc;
     void *dest;
     while (size > 0) {
-        // we don't need to check overflow because regions are aligned
-        // if we overflow, we won't get pte
+        region_t *r = get_region_with_possible_stack_extension(as, vaddr);
+        if (!r) return -1;
+        if (!(seL4_CapRights_get_capAllowWrite(r->rights))) return -1;
         dest = map_vaddr_to_sos(cspace, as, proc, vaddr, &lc, &rs, coro);
         if (dest == NULL) return -1;
         if (size < rs) rs = size;
+        if (r->memsize < rs) rs = r->memsize;
         memcpy(dest, src, rs);
         size -= rs;
         src += rs;
+        vaddr += rs;
+        flush_frame(lc.frame);
+        seL4_ARM_Page_Invalidate_Data(lc.cap, 0, PAGE_SIZE_4K);
+        seL4_ARM_Page_Unify_Instruction(lc.cap, 0, PAGE_SIZE_4K);
         unmap_vaddr_from_sos(cspace, lc);
     }
     return 0;
@@ -453,6 +463,7 @@ seL4_Error app_alloc_map_device(cspace_t *cspace, addrspace_t *as, vaddr_t vaddr
     } else {
         pte->cap = frame;
         pte->inuse = true;
+        pte->mapped = true;
         pte->type = DEVICE;
     }
 
@@ -492,6 +503,7 @@ seL4_Error sos_clone_and_map_device_frame(addrspace_t *as, cspace_t *cspace, seL
     } else {
         pte->cap = frame_cptr;
         pte->inuse = true;
+        pte->mapped = true;
         pte->type = DEVICE;
     }
 

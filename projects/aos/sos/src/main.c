@@ -85,9 +85,12 @@ int timer_irq(
     seL4_Word irq,
     seL4_IRQHandler irq_handler
 ) {
+    if (!is_clock_driver_ready()) {
+        ZF_LOGE("Got timer IRQ but timer driver is not ready");
+        return seL4_IRQHandler_Ack(irq_handler);
+    }
     seL4_Word irq_badge_queue[MAX_CONCURRENT_IRQS];
     int irq_queue_len = -1;
-    printf("timer irq\n");
     seL4_Send(timer_ep, seL4_MessageInfo_new(0, 0, 0, 1));
     seL4_Word badge = 0;
     // stupid mcs, how do i call recv without a reply obj
@@ -95,11 +98,9 @@ int timer_irq(
     seL4_CPtr reply;
     ut_t *reply_ut = alloc_retype(&reply, seL4_ReplyObject, seL4_ReplyBits);
     while (1) {
-        //printf("w\n");
         seL4_MessageInfo_t msg = seL4_Recv(timer_ep, &badge, reply);
-        //printf("wr\n");
-        printf("%d %d\n", seL4_MessageInfo_get_label(msg), seL4_MessageInfo_get_length(msg));
-        printf("%ld %ld %ld %ld\n", badge, seL4_GetMR(0), seL4_GetMR(1), seL4_GetMR(2));
+        // printf("%d %d\n", seL4_MessageInfo_get_label(msg), seL4_MessageInfo_get_length(msg));
+        // printf("%ld %ld %ld %ld\n", badge, seL4_GetMR(0), seL4_GetMR(1), seL4_GetMR(2));
         if (badge & IRQ_EP_BADGE) {
             /* It's a notification from our bound notification
              * object! We can't handle this here since irq handler could potentially block the kernel
@@ -108,23 +109,19 @@ int timer_irq(
             if (++irq_queue_len == MAX_CONCURRENT_IRQS) {
                 ZF_LOGF("too many IRQs in timer_irq routine. Please increase MAX_CONCURRENT_IRQS");
             }
-            printf("queueing irq %ld\n", badge);
+            // printf("queueing irq %ld\n", badge);
             irq_badge_queue[irq_queue_len] = badge;
             continue;
         }
         if (badge != PID_TO_BADGE(clock_driver_pid)) {
-            printf("badge %ld != clock %ld", badge, PID_TO_BADGE(clock_driver_pid));
+            // printf("badge %ld != clock %ld", badge, PID_TO_BADGE(clock_driver_pid));
             continue;
         }
-        printf("%ld %ld\n", seL4_MessageInfo_get_label(msg), seL4_MessageInfo_get_length(msg));
-        printf("%ld %ld %ld %ld\n", badge, seL4_GetMR(0), seL4_GetMR(1), seL4_GetMR(2));
         if (seL4_MessageInfo_get_length(msg) == 3) {
             unsigned int id = seL4_GetMR(0);
             timer_callback_t cb = seL4_GetMR(1);
             void *data = seL4_GetMR(2);
-            printf("cb\n");
             cb(id, data);
-            printf("cbb\n");
         } else {
             break;
         }
@@ -133,7 +130,6 @@ int timer_irq(
     cspace_free_slot(&cspace, reply);
     ut_free(reply_ut);
     seL4_Error ack_err = seL4_IRQHandler_Ack(irq_handler);
-    printf("%d\n", ack_err);
     for (int i = 0; i <= irq_queue_len; i++) {
         sos_handle_irq_notification(irq_badge_queue + i);
     }
@@ -144,6 +140,13 @@ int timer_irq(
 
 NORETURN void syscall_loop(seL4_CPtr ep)
 {
+    printf(
+        "  ______     _       _       ______  _____\n"
+        " /_  __/____(_)   __(_)___ _/ / __ \\/ ___/\n"
+        "  / / / ___/ / | / / / __ `/ / / / /\\__ \\ \n"
+        " / / / /  / /| |/ / / /_/ / / /_/ /___/ / \n"
+        "/_/ /_/  /_/ |___/_/\\__,_/_/\\____//____/ \n" 
+    );
     while (1) {
         seL4_CPtr reply;
         /* Create reply object */
@@ -163,27 +166,28 @@ NORETURN void syscall_loop(seL4_CPtr ep)
         process_t *proc = get_process_by_pid(BADGE_TO_PID(badge));
         currproc = proc;
 
-        // printf("got msg from badge %lld\n", badge);
+        ZF_LOGD("got msg from badge %lld\n", badge);
 
         if (badge & IRQ_EP_BADGE) {
             /* It's a notification from our bound notification
              * object! */
-            // printf("handle irq %lld\n", IRQ_EP_BADGE);
             sos_handle_irq_notification(&badge);
             cspace_delete(&cspace, reply);
             cspace_free_slot(&cspace, reply);
             ut_free(reply_ut);
         } else if (label == seL4_Fault_VMFault) {
-            debug_print_fault(message, proc->command);
+            // debug_print_fault(message, proc->command);
             seL4_Fault_t fault = seL4_getFault(message);
             handle_vm_fault(&cspace, seL4_Fault_VMFault_get_Addr(fault), seL4_Fault_VMFault_get_FSR(fault), proc, reply, reply_ut);
-            printf("finished handle vm fault\n");
         } else if (label == seL4_Fault_NullFault) {
             /* It's not a fault or an interrupt, it must be an IPC
              * message from tty_test! */
             handle_syscall(&cspace, badge, seL4_MessageInfo_get_length(message) - 1, reply, reply_ut, proc);
         } else {
-            ZF_LOGE("fault!\n");
+            debug_print_fault(message, proc->command);
+            ZF_LOGE("fault with badge %ld!\n", badge);
+            ZF_LOGE("proc %p\n", proc);
+            ZF_LOGE("proc name %s\n", proc->command);
             handle_fault_kill(proc);
         }
     }
@@ -306,7 +310,7 @@ NORETURN void *main_continued(UNUSED void *arg)
     /* Initialize console */
     console_init();
 
-    printf("\nSOS entering syscall loop\n");
+    printf("\nTrivialOS entering syscall loop\n");
     syscall_loop(ipc_ep);
 }
 
@@ -325,7 +329,7 @@ int main(void)
 
     debug_print_bootinfo(boot_info);
 
-    printf("\nSOS Starting...\n");
+    printf("\nTrivialOS Starting...\n");
 
     NAME_THREAD(seL4_CapInitThreadTCB, "SOS:root");
 
@@ -344,7 +348,7 @@ int main(void)
     update_vputchar(uart_putchar);
 
     /* test print */
-    printf("SOS Started!\n");
+    printf("TrivialOS Started!\n");
 
     /* allocate a bigger stack and switch to it -- we'll also have a guard page, which makes it much
      * easier to detect stack overruns */

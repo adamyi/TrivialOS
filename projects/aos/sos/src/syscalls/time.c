@@ -32,9 +32,13 @@ struct usleep_kill_hook_data {
 
 void usleep_kill_hook(void *data) {
     struct usleep_kill_hook_data *hd = data;
-    printf("removing timeout %ld\n", hd->timeoutid);
-    seL4_SetMR(0, hd->timeoutid);
-    seL4_Call(timer_ep, seL4_MessageInfo_new(0, 0, 0, 2));
+    ZF_LOGD("removing timeout %ld", hd->timeoutid);
+    if (is_clock_driver_ready()) {
+        seL4_SetMR(0, hd->timeoutid);
+        seL4_Call(timer_ep, seL4_MessageInfo_new(0, 0, 0, 2));
+    } else {
+        ZF_LOGE("tried to remove timeout but it looks like clock driver died");
+    }
     resume(hd->coro, NULL);
 }
 
@@ -65,24 +69,19 @@ IMPLEMENT_SYSCALL(usleep, 1) {
 }
 
 IMPLEMENT_SYSCALL(timer_callback, 3) {
-    printf("haha\n");
     if (proc->pid != clock_driver_pid)
         return return_word(-1);
-    printf("lmao\n");
     unsigned int id = seL4_GetMR(1);
     timer_callback_t cb = seL4_GetMR(2);
     void *data = seL4_GetMR(3);
-    printf("ccb\n");
+    ZF_LOGD("Calling timer callback");
     cb(id, data);
-    printf("cb\n");
     return return_word(0);
 }
 
 IMPLEMENT_SYSCALL(timer_ack, 0) {
-    printf("haha\n");
     if (proc->pid != clock_driver_pid)
         return return_word(-1);
-    printf("ack\n");
     seL4_IRQHandler_Ack(timer_irq_handler);
     return return_word(0);
 }

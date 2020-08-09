@@ -67,7 +67,7 @@ static void *_handle_syscall_impl(void *args) {
         ZF_LOGE("Unmatch syscall %s\n", syscalls[syscall_number]->name);
         reply_msg = return_error();
     } else {
-        ZF_LOGE("%s (%d) calling syscall %s\n", proc->command, proc->pid, syscalls[syscall_number]->name);
+        ZF_LOGD("%s (%d) calling syscall %s\n", proc->command, proc->pid, syscalls[syscall_number]->name);
         reply_msg = syscalls[syscall_number]->implementation(cspace, proc, coro);
     }
     // the only syscall that doesn't reply is to kill oneself
@@ -76,7 +76,6 @@ static void *_handle_syscall_impl(void *args) {
     cspace_delete(cspace, reply);
     cspace_free_slot(cspace, reply);
     ut_free(reply_ut);
-    //printf("sent\n");
     if (!killed) {
         if (proc->state == PROC_TO_BE_KILLED) {
             // die?
@@ -102,5 +101,4 @@ void handle_syscall(cspace_t *cspace, seL4_Word badge, size_t num_args, seL4_CPt
         .coro = c
     };
     resume(c, &args);
-    //printf("haha\n");
 }

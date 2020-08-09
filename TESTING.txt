@@ -1,0 +1,10 @@
+For your convenience, we provide the following userland applications together with TrivialOS:
+* sosh, a trivial shell program, modified from the provided sosh
+* original_sosh, the unmodified original sosh in starter code
+* tty_test, a simple Hello World
+* mem_test, test stack, heap (malloc via brk), heap (malloc via mmap), and direct mmap syscall
+* rdonly_test, test writing to read-only .code segment
+* nx_test, test jumping to executable and non-executable mmap-ed regions separately
+* tick, print out Hello World every 1 second
+* sleep10, sleeps for 10 seconds and die
+* forkbomb, starts 2 new forkbomb processes (keep trying if failed) then sleeps for 3 seconds and quit

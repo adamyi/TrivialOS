@@ -27,7 +27,7 @@ typedef struct uio {
     off_t offset;
     enum uio_seg segflag;
     enum uio_rw rw;
-    seL4_CPtr cptr;
+    pte_t pte;
 } uio_t;
 
 int uio_kinit(uio_t *uio, void *data, size_t size, size_t offset, enum uio_rw rw);

@@ -27,36 +27,11 @@
 
 #include "benchmark.h"
 
-#define BUF_SIZ    6144
+#define BUF_SIZ    10000
 #define MAX_ARGS   32
 
 static int in;
 static sos_stat_t sbuf;
-
-static size_t sos_debug_print(const void *vData, size_t count)
-{
-#ifdef CONFIG_DEBUG_BUILD
-    size_t i;
-    const char *realdata = vData;
-    for (i = 0; i < count; i++) {
-        seL4_DebugPutChar(realdata[i]);
-    }
-#endif
-    return count;
-}
-
-
-size_t sos_write(void *vData, size_t count)
-{
-    // use the content of tty test for this
-    return sos_debug_print(vData, count);
-}
-
-size_t sos_read(void *vData, size_t count)
-{
-    // use the content of tty test
-    return 0;
-}
 
 static void prstat(const char *name)
 {
@@ -339,7 +314,15 @@ int main(void)
     done = 0;
     new = 1;
 
-    printf("\n[SOS Starting %d]\n", in);
+    
+    printf(
+        "  ______     _       _       ______  _____\n"
+        " /_  __/____(_)   __(_)___ _/ / __ \\/ ___/\n"
+        "  / / / ___/ / | / / / __ `/ / / / /\\__ \\ \n"
+        " / / / /  / /| |/ / / /_/ / / /_/ /___/ / \n"
+        "/_/ /_/  /_/ |___/_/\\__,_/_/\\____//____/ \n"
+    );
+    printf("\n[sosh Starting %d]\n", in);
 
     while (!done) {
         if (new) {
@@ -358,6 +341,7 @@ int main(void)
                 break;
             }
             bp[r] = 0; /* terminate */
+            printf("bp: %s\n", bp);
             for (p = bp; p < bp + r; p++) {
                 if (*p == '\03') { /* ^C */
                     printf("^C\n");

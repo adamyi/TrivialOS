@@ -64,15 +64,18 @@ pt_test( void )
     assert((void *) buf1 > (void *) TEST_ADDRESS);
 
     /* stack test */
+    printf("stack test\n");
     do_pt_test(NPAGES_STACK, buf1);
 
     /* heap test (brk) */
+    printf("heap test (brk)\n");
     char *buf2 = malloc(NPAGES_BRK * PAGE_SIZE_4K);
     assert(buf2);
     do_pt_test(NPAGES_BRK, buf2);
     free(buf2);
     
     /* heap test (mmap) */
+    printf("heap test (mmap)\n");
     buf2 = malloc(NPAGES_MMAP * PAGE_SIZE_4K);
     assert(buf2);
     do_pt_test(NPAGES_MMAP, buf2);
@@ -92,8 +95,9 @@ pt_test( void )
     
     /* mmap test */
     // mmap 10 pages and munmap them in an annoying order
-    void *x = mmap(0, 5*PAGE_SIZE_4K, PROT_NONE, MAP_SHARED, 0, 0); // 0-4
-    void *y = mmap(x + 5 *PAGE_SIZE_4K, 5*PAGE_SIZE_4K, PROT_NONE, MAP_SHARED, 0, 0); // 5-9
+    printf("mmap test\n");
+    void *x = mmap(0, 5*PAGE_SIZE_4K, PROT_NONE, MAP_ANONYMOUS, 0, 0); // 0-4
+    void *y = mmap(x + 5 *PAGE_SIZE_4K, 5*PAGE_SIZE_4K, PROT_NONE, MAP_ANONYMOUS, 0, 0); // 5-9
     assert(x);
     assert(y);
     assert(y == x + 5 * PAGE_SIZE_4K);

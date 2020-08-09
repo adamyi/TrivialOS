@@ -81,7 +81,6 @@ void fdtable_destroy(fdtable_t *ft, coro_t me) {
     for (int i = 0; i < OPEN_MAX; ++i) {
         if (ft->fds[i] != NULL) {
             fdesc_t* fd = ft->fds[i];
-            // TODO: close them first?
             ft->fds[i] = NULL;
             fdesc_decrement(fd, me);
         }
@@ -113,7 +112,6 @@ int fdtable_put(fdtable_t *ft, int fd, fdesc_t *file, coro_t me) {
     if (!IS_VALID_FD(fd)) return -EBADF;
     if (ft->fds[fd] != NULL) {
         fdesc_t* tbdfd = ft->fds[fd];
-        // TODO: close first
         ft->fds[fd] = NULL;
         fdesc_decrement(tbdfd, me);
     }

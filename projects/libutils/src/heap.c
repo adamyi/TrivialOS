@@ -9,37 +9,23 @@
 #include "utils/heap.h"
 
 static void heap_fixup(heap_t *h, int idx) {
-    seL4_DebugPutChar('P');
     while (idx > 1 && h->compare(h->tree[idx / 2], h->tree[idx]) > 0) {
-        seL4_DebugPutChar('P');
         void *data = h->tree[idx / 2];
-        seL4_DebugPutChar('P');
         h->tree[idx / 2] = h->tree[idx];
-        seL4_DebugPutChar('P');
         h->tree[idx] = data;
-        seL4_DebugPutChar('P');
         idx /= 2;
     }
-    seL4_DebugPutChar('L');
 }
 
 static void heap_fixdown(heap_t *h, int idx) {
     while (idx * 2 <= h->size) {
-        seL4_DebugPutChar('Z');
         int i = idx * 2;
-        seL4_DebugPutChar('Z');
         if (i < h->size && h->compare(h->tree[i], h->tree[i + 1]) > 0) ++i;
-        seL4_DebugPutChar('Z');
         if (h->compare(h->tree[idx], h->tree[i]) <= 0) break;
-        seL4_DebugPutChar('Z');
         void *data = h->tree[idx];
-        seL4_DebugPutChar('Z');
         h->tree[idx] = h->tree[i];
-        seL4_DebugPutChar('Z');
         h->tree[i] = data;
-        seL4_DebugPutChar('Z');
         idx = i;
-        seL4_DebugPutChar('Z');
     }
 }
 

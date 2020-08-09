@@ -78,7 +78,7 @@ static void console_read_handler(struct serial *serial, char c) {
 }
 
 static void console_kill_hook(void *data) {
-    printf("calling console kill hook\n");
+    ZF_LOGD("calling console kill hook");
     (void) data;
     coro_t c = blocked_reader;
     blocked_reader = NULL;
@@ -86,27 +86,22 @@ static void console_kill_hook(void *data) {
 }
 
 int console_init() {
+    ZF_LOGI("Initializing console...");
     kbuff = new_rollingarray(CONSOLE_BUFFER_SIZE);
     if (kbuff == NULL) {
         ZF_LOGE("Error can't initialize kbuff");
         return -1;
     }
     queue_init(&newline_queue);
-    printf("serial_init\n");
     handle = serial_init();
-    printf("after serial_init\n");
     vnode_t *vnode = malloc(sizeof(vnode_t));
     if (vnode == NULL) {
         ZF_LOGE("Error making vnode");
         return -1;
     }
-    printf("aaa\n");
     vnode_init(vnode, &root_console_ops, handle);
-    printf("aaa\n");
     serial_register_handler(handle, console_read_handler); 
-    printf("aaa\n");
     register_device("console", vnode);
-    printf("aaa\n");
 
     return 0;
 }
@@ -153,14 +148,11 @@ int console_read(vnode_t *file, struct uio *uio, process_t *proc, coro_t me) {
         newline_idx = (size_t) queue_peek(&newline_queue);
     }
     newline_idx = ra_idx2ind(kbuff, newline_idx) + 1;
-    // ZF_LOGE("nlidx %lu uio len %lu\n", newline_idx, uio->iovec.len);
     if (newline_idx <= uio->iovec.len) {
         queue_dequeue(&newline_queue);
         uio->iovec.len = newline_idx;
     }
-    // ZF_LOGE("hh %p %d\n", uio->iovec.base, uio->iovec.len);
     uio->iovec.len = rollingarray_to_array(kbuff, (char *)uio->iovec.base, false, uio->iovec.len);
-    // ZF_LOGE("hh %d\n", uio->iovec.len);
     kbuff->start += uio->iovec.len;
     if (kbuff->start >= kbuff->capacity) kbuff->start -= kbuff->capacity;
     kbuff->size -= uio->iovec.len;

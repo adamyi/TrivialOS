@@ -154,8 +154,8 @@ static frame_ref_t find_victim() {
                return ref_from_frame(frame);
            }
            frame->ref = 0;
-           seL4_Error err = seL4_ARM_Page_Unmap(frame->pte->cap);
-           assert(err == seL4_NoError);
+           seL4_ARM_Page_Unmap(frame->pte->cap);
+           frame->pte->mapped = false;
        }
        push_back(&frame_table.allocated, frame);
        frame = pop_front(&frame_table.allocated);
@@ -224,7 +224,7 @@ int page_out(frame_ref_t frame_ref, coro_t coro) {
         ZF_LOGE("pagefile is full");
         return 1;
     }
-    ZF_LOGE("page out %d to pf %d", frame_ref, pfidx);
+    ZF_LOGD("page out %d to pf %d", frame_ref, pfidx);
 
     cspace_delete(frame_table.cspace, frame->pte->cap);
     cspace_free_slot(frame_table.cspace, frame->pte->cap);
@@ -242,20 +242,17 @@ int page_out(frame_ref_t frame_ref, coro_t coro) {
 
     uio_t myuio;
 
-    printf("dopageout %p\n", frame->pte);
     uio_kinit(&myuio, frame_data(frame_ref), PAGE_SIZE_4K, pfidx * PAGE_SIZE_4K, UIO_READ);
     if (VOP_PWRITE(pf_vnode, &myuio, coro) != PAGE_SIZE_4K) {
         ZF_LOGE("page_out: VOP_PWRITE not entire page");
         return 1;
     }
-    printf("donepageout\n");
 
     frame->pte->type = PAGED_OUT;
     if (frame->pte->frame) {
         pid_t pid = frame->pte->frame;
         frame->pte->frame = pfidx;
         process_t *proc = get_process_by_pid(pid);
-        printf("paged out pid %d coro %p\n", pid, proc->paging_coro);
         if (proc && proc->paging_coro) resume(proc->paging_coro, NULL);
     } else {
         frame->pte->frame = pfidx;
@@ -270,7 +267,7 @@ int page_out(frame_ref_t frame_ref, coro_t coro) {
 }
 
 int page_in(frame_ref_t ref, size_t pfidx, coro_t coro) {
-    ZF_LOGE("page in %d from pf %d", ref, pfidx);
+    ZF_LOGD("page in %d from pf %d", ref, pfidx);
     frame_t *frame = frame_from_ref(ref);
     frame->pin = 1;
 
@@ -281,6 +278,8 @@ int page_in(frame_ref_t ref, size_t pfidx, coro_t coro) {
         ZF_LOGE("page_in: VOP_PREAD  not entire page");
         return 1;
     }
+
+    flush_frame(ref);
 
     frame->pin = 0;
 

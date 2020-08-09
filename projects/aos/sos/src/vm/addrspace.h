@@ -20,6 +20,7 @@ typedef struct region {
     struct region *prev;
     struct region *next;
     size_t memsize;
+    bool mmaped;
 } region_t;
 
 typedef struct addrspace {
@@ -55,3 +56,13 @@ static inline region_t *get_region(region_t *rg, vaddr_t vaddr) {
     return NULL;
 }
 
+static inline region_t *get_region_with_possible_stack_extension(addrspace_t *as, vaddr_t vaddr) {
+    assert(as->stack->prev != NULL);
+    vaddr_t aligned = PAGE_ALIGN_4K(vaddr);
+    if (VEND(as->stack->prev) <= aligned && aligned < as->stack->vbase) {
+        as->stack->memsize += as->stack->vbase - aligned;
+        as->stack->vbase = aligned;
+        return as->stack;
+    }
+    return get_region(as->regions, vaddr);
+}

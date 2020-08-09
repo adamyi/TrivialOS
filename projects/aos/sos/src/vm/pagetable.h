@@ -42,7 +42,8 @@ PACKED struct pte {
     frame_ref_t frame : 20;
     seL4_ARM_Page cap : 20;
     pte_type_t type: 3;
-    seL4_Word free : 4;
+    seL4_Word free : 3;
+    bool mapped : 1;
     bool inuse : 1;
 };
 
@@ -60,8 +61,8 @@ pte_t *get_pte(addrspace_t *as, vaddr_t vaddr, bool create, coro_t coro);
 seL4_Error alloc_map_frame(addrspace_t *as, cspace_t *cspace, seL4_Word vaddr,
                     seL4_CapRights_t rights, seL4_ARM_VMAttributes attrs, pte_t *pte, coro_t coro, bool pinned);
 void unalloc_frame(addrspace_t *as, cspace_t *cspace, vaddr_t vaddr, coro_t coro);
-void *map_vaddr_to_sos(cspace_t *cspace, addrspace_t *as, process_t *proc, vaddr_t vaddr, seL4_CPtr *local_cptr, size_t *size, coro_t coro);
-void unmap_vaddr_from_sos(cspace_t *cspace, seL4_CPtr local_cptr);
+void *map_vaddr_to_sos(cspace_t *cspace, addrspace_t *as, process_t *proc, vaddr_t vaddr, pte_t *ppte, size_t *size, coro_t coro);
+void unmap_vaddr_from_sos(cspace_t *cspace, pte_t pte);
 int copy_in(cspace_t *cspace, addrspace_t *as, process_t *proc, vaddr_t vaddr, size_t size, void *dest, coro_t coro);
 int copy_out(cspace_t *cspace, addrspace_t *as, process_t *proc, vaddr_t vaddr, size_t size, void *src, coro_t coro);
 void pagetable_destroy(addrspace_t *as, cspace_t *cspace, coro_t coro);

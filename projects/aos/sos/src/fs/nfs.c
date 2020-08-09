@@ -189,7 +189,7 @@ int sos_nfs_get_dirent(vnode_t *vnode, int pos, char *name, size_t nbyte, coro_t
         .data = NULL
     };
     // currently open root directory
-    // TODO: ask which directory to open
+    // because we use a flattened file system :trivial:
     if (nfs_opendir_async(sos_nfs, "/", sos_nfs_cb, &cb_ret) < 0) return -1;
     yield(NULL);
     if (cb_ret.status < 0) {
